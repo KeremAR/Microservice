@@ -47,12 +47,24 @@ This is the User Service for the Campus Issue Management System. It handles user
 
 ## Running with Docker
 
-1. Build the Docker image:
+1. Navigate to the user-service directory:
    ```
-   docker build -t user-service .
+   cd user-service
    ```
-2. Run with Docker Compose (from the root directory):
+
+2. Build and run with Docker Compose:
    ```
+   docker-compose up -d
+   ```
+
+3. To stop the containers:
+   ```
+   docker-compose down
+   ```
+
+4. To rebuild the image after making changes:
+   ```
+   docker-compose build
    docker-compose up -d
    ```
 

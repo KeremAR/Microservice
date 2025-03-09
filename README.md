@@ -1,4 +1,8 @@
+# Campus Issue Management System - Microservices Architecture
 
+This project implements a microservices-based system for managing campus issues and maintenance requests.
+
+## Microservices
 
 ### 1️⃣ User Service  - Spring Boot – Java (PostgreSQL)
 - Kullanıcı kaydı, giriş (auth), roller (admin, öğrenci vb.)
@@ -15,7 +19,7 @@
 - Fotoğraf yükleme, kategori seçme (altyapı, temizlik vb.)
 - Sorunları listeleme, durum güncelleme
 - Redis veya benzeri bir sistem ile caching mekanizması eklenecek.
-- Kafka veya RabbitMQ ile **"Issue Created"** event’i yayınlama
+- Kafka veya RabbitMQ ile **"Issue Created"** event'i yayınlama
 - **Endpointler:**  
   - `POST /issues/report`
   - `GET /issues/{id}`
@@ -26,7 +30,7 @@
 - Kampüsteki farklı departmanlar sorunları çözmekle yükümlü
 - Sorunları ilgili birime yönlendirme
 - Departman bazlı istatistikler
-- Kafka veya RabbitMQ ile **"Issue Created"** event’ini dinleme ve database’e işleme
+- Kafka veya RabbitMQ ile **"Issue Created"** event'ini dinleme ve database'e işleme
 - **Endpointler:**  
   - `GET /departments`
   - `POST /departments`
@@ -36,7 +40,7 @@
 ### 4️⃣ Notification Service  - Node.js – NestJS (PostgreSQL)
 - Kullanıcılara durum değişiklikleri hakkında bildirim gönderme
 - E-posta, SMS veya push notification desteği
-- Kafka veya RabbitMQ ile **"Issue Status Updated"** event’ini dinleme ve bildirim gönderme
+- Kafka veya RabbitMQ ile **"Issue Status Updated"** event'ini dinleme ve bildirim gönderme
 - **Endpointler:**  
   - `POST /notifications/send`
   - **EVENT LISTENER:** Issue Status Updated (Kafka / RabbitMQ)
@@ -44,17 +48,48 @@
 ### 5️⃣ Gateway Service  - Spring Cloud Gateway
 - Tüm servislere tek bir noktadan erişim
 - Load balancing, authentication ve rate limiting
-- **Request Aggregation:** Kullanıcı bir sorgu yaptığında hem Issue Service hem Department Service’ten veri çekerek tek bir JSON döndürme
+- **Request Aggregation:** Kullanıcı bir sorgu yaptığında hem Issue Service hem Department Service'ten veri çekerek tek bir JSON döndürme
 - **Spring Cloud Gateway veya Kong API Gateway tercih edilebilir**
 
-### 6️⃣ Testing & Monitoring
-- İlerde tartışılır eklenir
+## Running the Services
 
----
+### Running Individual Services
 
-## 🚀 Deployment:
+Each microservice has its own Docker setup and can be run independently:
+
+1. Navigate to the service directory:
+   ```
+   cd <service-directory>
+   ```
+
+2. Build and run with Docker Compose:
+   ```
+   docker-compose up -d
+   ```
+
+### Running All Services
+
+To run all services together:
+
+```
+docker-compose up -d
+```
+
+This will start all the services defined in the root docker-compose.yml file.
+
+## Deployment
+
 ✅ **Docker**: Her mikroservis için bir Docker image oluşturacağız.  
 ✅ **Kubernetes**: Bu container'ları yönetmek için Kubernetes kullanacağız.  
 
-## 📄 Documentation:
+## Documentation
+
 📌 **Swagger**: API dökümantasyonu için kullanılacak.
+
+## Service URLs
+
+- User Service: http://localhost:8081
+- Issue Service: http://localhost:8082 (coming soon)
+- Department Service: http://localhost:8083 (coming soon)
+- Notification Service: http://localhost:8084 (coming soon)
+- Gateway Service: http://localhost:8080 (coming soon)

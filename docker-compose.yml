@@ -1,27 +1,15 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:14-alpine
-    container_name: postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: campus_user_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - campus-network
-
+  # User Service
   user-service:
     build: ./user-service
     container_name: user-service
     depends_on:
-      - postgres
+      user-service-postgres:
+        condition: service_healthy
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/campus_user_db
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://user-service-postgres:5432/campus_user_db
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
     ports:
@@ -29,9 +17,68 @@ services:
     networks:
       - campus-network
 
+  # PostgreSQL for User Service
+  user-service-postgres:
+    image: postgres:14-alpine
+    container_name: user-service-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: campus_user_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - user_postgres_data:/var/lib/postgresql/data
+    networks:
+      - campus-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Future services will be added here
+  # Example:
+  # issue-service:
+  #   build: ./issue-service
+  #   container_name: issue-service
+  #   ports:
+  #     - "8082:8082"
+  #   networks:
+  #     - campus-network
+
+  # department-service:
+  #   build: ./department-service
+  #   container_name: department-service
+  #   ports:
+  #     - "8083:8083"
+  #   networks:
+  #     - campus-network
+
+  # notification-service:
+  #   build: ./notification-service
+  #   container_name: notification-service
+  #   ports:
+  #     - "8084:8084"
+  #   networks:
+  #     - campus-network
+
+  # gateway-service:
+  #   build: ./gateway-service
+  #   container_name: gateway-service
+  #   ports:
+  #     - "8080:8080"
+  #   networks:
+  #     - campus-network
+
 networks:
   campus-network:
     driver: bridge
 
 volumes:
-  postgres_data: 
+  user_postgres_data:
+  # Future volumes will be added here
+  # Example:
+  # issue_mongodb_data:
+  # department_postgres_data:
+  # notification_postgres_data: 

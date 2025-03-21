@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api")
 @Tag(name = "User Management", description = "User management API endpoints")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "bearer-jwt")
 public class UserController {
     
     @Autowired
@@ -30,7 +30,7 @@ public class UserController {
     
     @GetMapping("/users/{id}")
     @Operation(summary = "Get user by ID", description = "Retrieves user information by ID")
-    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or @userSecurity.isCurrentUser(#id)")
     public ResponseEntity<?> getUserById(@PathVariable Long id) {
         return userRepository.findById(id)
                 .map(user -> {
@@ -43,7 +43,7 @@ public class UserController {
     
     @PutMapping("/users/{id}")
     @Operation(summary = "Update user", description = "Updates user information")
-    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or @userSecurity.isCurrentUser(#id)")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @Valid @RequestBody User userDetails) {
         return userRepository.findById(id)
                 .map(user -> {
@@ -64,9 +64,16 @@ public class UserController {
     @GetMapping("/me")
     @Operation(summary = "Get current user", description = "Retrieves the currently authenticated user's profile")
     @PreAuthorize("hasRole('STUDENT') or hasRole('STAFF') or hasRole('ADMIN')")
-    public ResponseEntity<?> getCurrentUser(@RequestHeader("Authorization") String token) {
-        // Implementation would extract user from JWT token
-        // This is a placeholder - actual implementation would use SecurityContextHolder
-        return ResponseEntity.ok().build();
+    public ResponseEntity<?> getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        return userRepository.findById(userDetails.getId())
+                .map(user -> {
+                    // Remove sensitive information
+                    user.setPassword(null);
+                    return ResponseEntity.ok(user);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 } 

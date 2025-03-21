@@ -43,6 +43,9 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                logger.debug("Set authentication for user: {}", username);
+            } else {
+                logger.debug("JWT token is null or invalid");
             }
         } catch (Exception e) {
             logger.error("Cannot set user authentication: {}", e.getMessage());
@@ -59,5 +62,14 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         }
 
         return null;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        return path.startsWith("/api/auth/") || 
+               path.startsWith("/swagger-ui/") || 
+               path.startsWith("/api-docs/") || 
+               path.equals("/swagger-ui.html");
     }
 } 

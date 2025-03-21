@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api")
 @Tag(name = "Authentication", description = "Authentication API for login and registration")
 public class AuthController {
     @Autowired
@@ -48,7 +48,7 @@ public class AuthController {
     @Autowired
     JwtUtils jwtUtils;
 
-    @PostMapping("/login")
+    @PostMapping("/auth/login")
     @Operation(summary = "User login", description = "Authenticates a user and returns a JWT token")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
 
@@ -72,7 +72,7 @@ public class AuthController {
                                                  roles));
     }
 
-    @PostMapping("/register")
+    @PostMapping("/auth/register")
     @Operation(summary = "User registration", description = "Registers a new user")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
         if (userRepository.existsByUsername(signUpRequest.getUsername())) {

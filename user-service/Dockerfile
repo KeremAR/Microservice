@@ -1,12 +1,37 @@
-FROM maven:3.8.5-openjdk-17-slim AS build
+# Build stage
+FROM maven:3.9.6-eclipse-temurin-17-focal AS build
 WORKDIR /app
-COPY pom.xml .
-RUN mvn dependency:go-offline
-COPY src ./src
-RUN mvn package -DskipTests
 
-FROM openjdk:17-slim
+# Copy pom.xml first to leverage Docker cache
+COPY pom.xml .
+
+# Download dependencies
+RUN mvn dependency:go-offline
+
+# Copy source code
+COPY src ./src
+
+# Build the application
+RUN mvn clean package -DskipTests
+
+# Run stage
+FROM eclipse-temurin:17-jre-focal
 WORKDIR /app
-COPY --from=build /app/target/user-service-0.0.1-SNAPSHOT.jar app.jar
-EXPOSE 8081
+
+# Copy the built artifact from build stage
+COPY --from=build /app/target/*.jar app.jar
+
+# Create a non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
+# Expose the port
+EXPOSE 8080
+
+# Set environment variables
+ENV SPRING_PROFILES_ACTIVE=prod
+ENV TZ=UTC
+
+# Run the application
 ENTRYPOINT ["java", "-jar", "app.jar"] 

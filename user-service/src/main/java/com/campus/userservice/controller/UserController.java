@@ -2,27 +2,35 @@ package com.campus.userservice.controller;
 
 import com.campus.userservice.model.User;
 import com.campus.userservice.repository.UserRepository;
+import com.campus.userservice.security.services.UserDetailsImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
-@RequestMapping("/api/users")
-@Tag(name = "Users", description = "User management API")
+@RequestMapping("/api")
+@Tag(name = "User Management", description = "User management API endpoints")
 @SecurityRequirement(name = "bearerAuth")
 public class UserController {
     
     @Autowired
     private UserRepository userRepository;
     
-    @GetMapping("/{id}")
-    @Operation(summary = "Get user by ID", description = "Retrieves a user by their ID")
-    @PreAuthorize("hasRole('STUDENT') or hasRole('STAFF') or hasRole('ADMIN')")
+    @Autowired
+    private PasswordEncoder encoder;
+    
+    @GetMapping("/users/{id}")
+    @Operation(summary = "Get user by ID", description = "Retrieves user information by ID")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
     public ResponseEntity<?> getUserById(@PathVariable Long id) {
         return userRepository.findById(id)
                 .map(user -> {
@@ -33,10 +41,10 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
     
-    @PutMapping("/{id}")
-    @Operation(summary = "Update user", description = "Updates a user's profile information")
-    @PreAuthorize("hasRole('STUDENT') or hasRole('STAFF') or hasRole('ADMIN')")
-    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User userDetails) {
+    @PutMapping("/users/{id}")
+    @Operation(summary = "Update user", description = "Updates user information")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @Valid @RequestBody User userDetails) {
         return userRepository.findById(id)
                 .map(user -> {
                     // Update only allowed fields (not password or roles)

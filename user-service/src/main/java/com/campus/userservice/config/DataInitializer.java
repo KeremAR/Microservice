@@ -29,8 +29,6 @@ public class DataInitializer {
         // Create roles if they don't exist
         Role adminRole = roleRepository.findByName(Role.ERole.ROLE_ADMIN)
                 .orElseGet(() -> roleRepository.save(new Role(null, Role.ERole.ROLE_ADMIN)));
-        Role userRole = roleRepository.findByName(Role.ERole.ROLE_USER)
-                .orElseGet(() -> roleRepository.save(new Role(null, Role.ERole.ROLE_USER)));
         Role staffRole = roleRepository.findByName(Role.ERole.ROLE_STAFF)
                 .orElseGet(() -> roleRepository.save(new Role(null, Role.ERole.ROLE_STAFF)));
         Role studentRole = roleRepository.findByName(Role.ERole.ROLE_STUDENT)

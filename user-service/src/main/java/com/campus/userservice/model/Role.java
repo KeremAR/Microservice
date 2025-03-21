@@ -21,7 +21,6 @@ public class Role {
     private ERole name;
     
     public enum ERole {
-        ROLE_USER,
         ROLE_STUDENT,
         ROLE_STAFF,
         ROLE_ADMIN

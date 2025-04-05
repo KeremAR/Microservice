@@ -11,6 +11,8 @@ import com.campus.userservice.repository.RoleRepository;
 import com.campus.userservice.repository.UserRepository;
 import com.campus.userservice.security.jwt.JwtUtils;
 import com.campus.userservice.security.services.UserDetailsImpl;
+import com.campus.userservice.domain.events.UserRegisteredEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -47,6 +49,9 @@ public class AuthController {
 
     @Autowired
     JwtUtils jwtUtils;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     @PostMapping("/auth/login")
     @Operation(summary = "User login", description = "Authenticates a user and returns a JWT token")
@@ -123,7 +128,14 @@ public class AuthController {
         }
 
         user.setRoles(roles);
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        // Publish the domain event
+        eventPublisher.publishEvent(new UserRegisteredEvent(
+            savedUser.getId(),
+            savedUser.getUsername(),
+            savedUser.getEmail()
+        ));
 
         return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
     }

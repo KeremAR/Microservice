@@ -1,10 +1,11 @@
-using IssueService.Models;
+using System.Threading.Tasks;
+using IssueService.Domain.IssueAggregate;
 
 namespace IssueService.Repositories.Interfaces;
 
 public interface IIssueRepository
 {
-    Task<Issue> CreateAsync(Issue issue);
     Task<Issue> GetByIdAsync(string id);
-    Task UpdateStatusAsync(string id, string status);
+    Task CreateAsync(Issue issue);
+    Task UpdateStatusAsync(string id, IssueStatus status);
 }

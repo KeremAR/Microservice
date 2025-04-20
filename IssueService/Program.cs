@@ -3,20 +3,26 @@ using IssueService.Repositories.Implementations;
 using IssueService.Repositories.Interfaces;
 using IssueService.Services.Implementations;
 using IssueService.Services.Interfaces;
+using IssueService.Messaging.Implementations;
+using IssueService.Messaging.Interfaces;
+using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // MongoDB Context
 builder.Services.AddSingleton<MongoDbContext>();
 
+// MediatR
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<Program>());
+
 // Repositories
 builder.Services.AddScoped<IIssueRepository, IssueRepository>();
 
-// Services (DÜZELTİLDİ)
+// Services
 builder.Services.AddScoped<IIssueService, IssueServiceImpl>();
 
 // RabbitMQ Producer
-builder.Services.AddSingleton<RabbitMQProducer>();
+builder.Services.AddSingleton<IRabbitMQProducer, RabbitMQProducer>();
 
 // Controllers
 builder.Services.AddControllers();

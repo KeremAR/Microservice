@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
-using IssueService.Models;
+using IssueService.Domain.IssueAggregate; 
+
 
 namespace IssueService.Data;
 
@@ -14,5 +15,5 @@ public class MongoDbContext
         _database = client.GetDatabase(configuration["MongoDB:Database"]);
     }
 
-    public IMongoCollection<Issue> Issues => _database.GetCollection<Issue>("Issues");
+   public IMongoCollection<Issue> Issues =>  _database.GetCollection<Issue>("issues");
 }

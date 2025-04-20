@@ -1,4 +1,4 @@
-package com.example.departmanservice;
+package com.example.departmentservice;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

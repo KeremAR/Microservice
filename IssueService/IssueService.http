@@ -1,0 +1,6 @@
+@IssueService_HostAddress = http://localhost:5240
+
+GET {{IssueService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

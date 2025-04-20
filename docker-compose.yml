@@ -21,6 +21,25 @@ services:
     networks:
       - microservice-network
 
+  department_service:
+    build: ./department-service
+    container_name: department-service
+    depends_on:
+      department-service-postgres:
+        condition: service_healthy
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/department_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+    ports:
+      - "8083:8083"
+    networks:
+      - microservice-network
+
   # PostgreSQL for User Service
   user-service-postgres:
     image: postgres:latest
@@ -37,6 +56,25 @@ services:
       - microservice-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  department-service-postgres:
+    image: postgres:latest
+    container_name: department-service-postgres
+    environment:
+      POSTGRES_DB: department_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - microservice-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5

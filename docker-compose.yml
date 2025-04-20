@@ -2,35 +2,39 @@ version: '3.8'
 
 services:
   # User Service
-  user-service:
+  user_service:
     build: ./user-service
     container_name: user-service
     depends_on:
       user-service-postgres:
         condition: service_healthy
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://user-service-postgres:5432/campus_user_db
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/userdb
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
     ports:
-      - "8081:8081"
+      - "8081:8080"
     networks:
-      - campus-network
+      - microservice-network
 
   # PostgreSQL for User Service
   user-service-postgres:
-    image: postgres:14-alpine
+    image: postgres:latest
     container_name: user-service-postgres
     environment:
+      POSTGRES_DB: userdb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: campus_user_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - user_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - campus-network
+      - microservice-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -39,18 +43,18 @@ services:
 
   # RabbitMQ Service
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3-management
     container_name: campus_issue_rabbitmq
     ports:
       - "5672:5672"   # AMQP protokolü için
-      - "15672:15672" # Management UI için
+      - "15673:15672" # Management UI için
     environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: admin123
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
-      - campus-network
+      - microservice-network
 
   # Future services will be added here
   # Example:
@@ -87,11 +91,11 @@ services:
   #     - campus-network
 
 networks:
-  campus-network:
+  microservice-network:
     driver: bridge
 
 volumes:
-  user_postgres_data:
+  postgres_data:
   rabbitmq_data:
   # Future volumes will be added here
   # Example:

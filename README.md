@@ -29,6 +29,7 @@
 - Kafka veya RabbitMQ ile **"Issue Created"** event’ini dinleme ve database’e işleme
 - **Endpointler:**  
   - `GET /departments`
+  - `GET /departments/{id} `
   - `POST /departments`
   - `GET /departments/{id}/issues`
   - **EVENT LISTENER:** Issue Created (Kafka / RabbitMQ ile dinlenecek)
@@ -47,7 +48,13 @@
 - **Request Aggregation:** Kullanıcı bir sorgu yaptığında hem Issue Service hem Department Service’ten veri çekerek tek bir JSON döndürme
 - **Spring Cloud Gateway veya Kong API Gateway tercih edilebilir**
 
-### 6️⃣ Testing & Monitoring
+### 6️⃣ Saga Service - Spring Boot – Java (Veritabanı?)
+- Dağıtık işlemleri (distributed transactions) yönetmek için Orkestrasyon tabanlı Saga Pattern uygular.
+- Özellikle "Issue Creation" gibi birden fazla servisi etkileyen iş akışlarının tutarlılığını sağlar.
+- Başarısız adımlarda telafi edici işlemleri (compensating transactions) tetikler.
+- **Teknoloji:** İş akışı yönetimi için Camunda, Temporal veya basit Spring bileşenleri kullanılabilir.
+
+### 7️⃣ Testing & Monitoring
 - İlerde tartışılır eklenir
 
 ---
@@ -58,3 +65,29 @@
 
 ## 📄 Documentation:
 📌 **Swagger**: API dökümantasyonu için kullanılacak.
+
+---
+
+## 📝 Proje Hakkında
+
+**Proje Adı:** Kampüs Sorun Bildirim ve Takip Sistemi
+
+**Projenin Amacı:**
+Bu proje, üniversite kampüsündeki öğrencilerin ve personelin altyapı, temizlik, güvenlik gibi sorunları kolayca bildirebilmesini sağlar. Yetkili birimler, kendilerine iletilen sorunları sistem üzerinden takip eder ve çözüme ulaştırır. Kullanıcılar, bildirdikleri sorunların durumunu anlık olarak görebilir ve bildirim alabilir.
+
+**Teknik Özellikler:**
+✅ Mobil Uygulama: Kullanıcıların sorun bildirebileceği ve takip edebileceği bir arayüz olacak.
+✅ Web portal: Departmanlardaki yetkili kişiler web portal üzerinden gelen sorunları görecek durumunu güncelleyecek.
+✅ Google Maps Entegrasyonu: Kampüs içinde bildirilen sorunları harita üzerinden göstereceğiz.
+✅ Mikroservis Mimarisi: Backend, ölçeklenebilir olması için mikroservis yapısında geliştirilecek.
+✅ Farklı Diller ve Frameworkler: En az 3 farklı framework veya programlama dili kullanılacak.
+✅ Bildirim Sistemi: Kullanıcılar, sorunlarının çözüm sürecini anlık olarak takip edebilecek.
+
+**Kullanıcı Senaryosu:**
+Öğrenci veya personel, kampüsteki bir sorunu fotoğraf ekleyerek bildirir.
+
+Yetkili birim, kendisine iletilen sorunları görüp çözüm sürecini yönetir.
+
+Kullanıcı, bildirdiği sorunun güncellenme durumunu bildirimlerle takip eder.
+
+Sorunlar harita üzerinde gösterilir, böylece yoğun şikayet alanları belirlenebilir.

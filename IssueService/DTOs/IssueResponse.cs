@@ -1,4 +1,4 @@
-using IssueService.Models;
+using IssueService.Domain.IssueAggregate;
 
 namespace IssueService.DTOs;
 
@@ -9,19 +9,19 @@ public class IssueResponse
     public string Description { get; set; }
     public string Category { get; set; }
     public string PhotoUrl { get; set; }
+    public string UserId { get; set; }
     public string Status { get; set; }
     public DateTime CreatedAt { get; set; }
-    public string UserId { get; set; }
 
     public IssueResponse(Issue issue)
     {
-        Id = issue.Id;
+        Id = issue.Id.ToString();
         Title = issue.Title;
         Description = issue.Description;
         Category = issue.Category;
         PhotoUrl = issue.PhotoUrl;
-        Status = issue.Status;
-        CreatedAt = issue.CreatedAt;
         UserId = issue.UserId;
+        Status = issue.Status.ToString();
+        CreatedAt = issue.CreatedAt;
     }
 }

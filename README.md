@@ -15,7 +15,7 @@
 - Fotoğraf yükleme, kategori seçme (altyapı, temizlik vb.)
 - Sorunları listeleme, durum güncelleme
 - Redis veya benzeri bir sistem ile caching mekanizması eklenecek.
-- Kafka veya RabbitMQ ile **"Issue Created"** event’i yayınlama
+- RabbitMQ ile **"Issue Created"** event’i yayınlama
 - **Endpointler:**  
   - `POST /issues/report`
   - `GET /issues/{id}`
@@ -26,7 +26,7 @@
 - Kampüsteki farklı departmanlar sorunları çözmekle yükümlü
 - Sorunları ilgili birime yönlendirme
 - Departman bazlı istatistikler
-- Kafka veya RabbitMQ ile **"Issue Created"** event’ini dinleme ve database’e işleme
+- RabbitMQ ile **"Issue Created"** event’ini dinleme ve database’e işleme
 - **Endpointler:**  
   - `GET /departments`
   - `GET /departments/{id} `
@@ -37,7 +37,7 @@
 ### 4️⃣ Notification Service  - Node.js – NestJS (PostgreSQL)
 - Kullanıcılara durum değişiklikleri hakkında bildirim gönderme
 - E-posta, SMS veya push notification desteği
-- Kafka veya RabbitMQ ile **"Issue Status Updated"** event’ini dinleme ve bildirim gönderme
+- RabbitMQ ile **"Issue Status Updated"** event’ini dinleme ve bildirim gönderme
 - **Endpointler:**  
   - `POST /notifications/send`
   - **EVENT LISTENER:** Issue Status Updated (Kafka / RabbitMQ)

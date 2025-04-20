@@ -2,6 +2,8 @@ package com.campus.userservice.controller;
 
 import com.campus.userservice.dto.UserUpdateRequest;
 import com.campus.userservice.model.User;
+import com.campus.userservice.model.Role;
+import com.campus.userservice.model.ERole;
 import com.campus.userservice.repository.UserRepository;
 import com.campus.userservice.repository.RoleRepository;
 import com.campus.userservice.domain.events.UserProfileUpdatedEvent;
@@ -9,18 +11,23 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
@@ -36,7 +43,10 @@ public class UserController {
     private RoleRepository roleRepository;
     
     @Autowired
-    private ApplicationEventPublisher eventPublisher;
+    private RabbitTemplate rabbitTemplate;
+    
+    @Value("${rabbitmq.exchange.user}")
+    private String userEventsExchangeName;
     
     private boolean isOwnerOrAdmin(Jwt principal, String targetEntraId) {
         String requesterEntraId = principal.getClaimAsString("oid");
@@ -67,7 +77,8 @@ public class UserController {
     }
     
     @PutMapping("/{id}")
-    @Operation(summary = "Update user by internal ID", description = "Updates user information (firstName, lastName). Only the owner can update.")
+    @Operation(summary = "Update user by internal ID", description = "Updates user information and publishes an event to RabbitMQ.")
+    @Transactional
     public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody UserUpdateRequest userDetails, @AuthenticationPrincipal Jwt principal) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
@@ -83,27 +94,55 @@ public class UserController {
 
         User updatedUser = userRepository.save(user);
 
-        eventPublisher.publishEvent(new UserProfileUpdatedEvent(
+        UserProfileUpdatedEvent event = new UserProfileUpdatedEvent(
             updatedUser.getId(),
             oldEmail,
             updatedUser.getEmail()
-        ));
+        );
+        String routingKey = "user.profile.updated";
+        rabbitTemplate.convertAndSend(userEventsExchangeName, routingKey, event);
+        System.out.println("Published UserProfileUpdatedEvent to RabbitMQ: " + event);
 
         return ResponseEntity.ok(updatedUser);
     }
     
     @GetMapping("/me")
-    @Operation(summary = "Get current user", description = "Retrieves the currently authenticated user's profile based on the token")
+    @Operation(summary = "Get current user", description = "Retrieves the currently authenticated user's profile. Creates the profile if it doesn't exist.")
+    @Transactional
     public ResponseEntity<User> getCurrentUser(@AuthenticationPrincipal Jwt principal) {
         String entraId = principal.getClaimAsString("oid");
         if (entraId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
 
-        User user = userRepository.findByEntraId(entraId)
-                .orElseThrow(() -> new EntityNotFoundException("User profile not found for Entra ID: " + entraId));
-        
+        User user = userRepository.findByEntraId(entraId).orElseGet(() -> {
+            String email = principal.getClaimAsString("email");
+            if (email != null && userRepository.existsByEmail(email)) {
+                throw new IllegalStateException("User with email " + email + " already exists, but Entra ID mismatch.");
+            }
+            
+            User newUser = User.builder()
+                .entraId(entraId)
+                .email(email)
+                .firstName(principal.getClaimAsString("given_name"))
+                .lastName(principal.getClaimAsString("family_name"))
+                .username(principal.getClaimAsString("preferred_username"))
+                .roles(getDefaultUserRoles()) 
+                .build();
+            
+            System.out.println("Creating new user profile for Entra ID: " + entraId);
+            return userRepository.save(newUser);
+        });
+
         return ResponseEntity.ok(user);
+    }
+    
+    private Set<Role> getDefaultUserRoles() {
+        Set<Role> roles = new HashSet<>();
+        Role userRole = roleRepository.findByName(Role.ERole.ROLE_STUDENT)
+                .orElseThrow(() -> new RuntimeException("Error: Default role ROLE_STUDENT not found."));
+        roles.add(userRole);
+        return roles;
     }
     
     @GetMapping("/entra/{entraId}")

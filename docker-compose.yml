@@ -43,18 +43,23 @@ services:
 
   # RabbitMQ Service
   rabbitmq:
-    image: rabbitmq:3-management
-    container_name: campus_issue_rabbitmq
+    image: rabbitmq:3-management-alpine
+    container_name: user_service_rabbitmq
     ports:
-      - "5672:5672"   # AMQP protokolü için
-      - "15673:15672" # Management UI için
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI port
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
-      - microservice-network
+      - user-network
 
   # Future services will be added here
   # Example:
@@ -92,6 +97,8 @@ services:
 
 networks:
   microservice-network:
+    driver: bridge
+  user-network:
     driver: bridge
 
 volumes:

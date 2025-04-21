@@ -11,9 +11,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -43,10 +42,7 @@ public class UserController {
     private RoleRepository roleRepository;
     
     @Autowired
-    private RabbitTemplate rabbitTemplate;
-    
-    @Value("${rabbitmq.exchange.user}")
-    private String userEventsExchangeName;
+    private ApplicationEventPublisher eventPublisher;
     
     private boolean isOwnerOrAdmin(Jwt principal, String targetEntraId) {
         String requesterEntraId = principal.getClaimAsString("oid");
@@ -77,7 +73,7 @@ public class UserController {
     }
     
     @PutMapping("/{id}")
-    @Operation(summary = "Update user by internal ID", description = "Updates user information and publishes an event to RabbitMQ.")
+    @Operation(summary = "Update user by internal ID", description = "Updates user information (firstName, lastName). Only the owner can update.")
     @Transactional
     public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody UserUpdateRequest userDetails, @AuthenticationPrincipal Jwt principal) {
         User user = userRepository.findById(id)
@@ -94,14 +90,11 @@ public class UserController {
 
         User updatedUser = userRepository.save(user);
 
-        UserProfileUpdatedEvent event = new UserProfileUpdatedEvent(
+        eventPublisher.publishEvent(new UserProfileUpdatedEvent(
             updatedUser.getId(),
             oldEmail,
             updatedUser.getEmail()
-        );
-        String routingKey = "user.profile.updated";
-        rabbitTemplate.convertAndSend(userEventsExchangeName, routingKey, event);
-        System.out.println("Published UserProfileUpdatedEvent to RabbitMQ: " + event);
+        ));
 
         return ResponseEntity.ok(updatedUser);
     }

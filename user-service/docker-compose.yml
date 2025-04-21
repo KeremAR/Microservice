@@ -32,6 +32,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    networks:
+      - user-network
 
   user-service:
     build:
@@ -62,6 +64,7 @@ services:
 networks:
   user-network:
     driver: bridge
+  
 
 volumes:
   postgres_data: 

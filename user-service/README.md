@@ -51,8 +51,8 @@ Aggregates are clusters of domain objects that can be treated as a single unit. 
 
 *   **User Aggregate:**
     *   **Aggregate Root:** `User.java`
-    *   **Description:** Represents a user in the system. It includes user details (username, email, names, password) and their associated roles (`Set<Role>`). Operations like updating profile information or managing roles (though indirectly via repositories) are handled within the context of this aggregate.
-    *   **Consistency:** Ensures that a User object maintains valid state (e.g., required fields). Role assignments are managed to maintain relationships.
+    *   **Description:** Represents a user in the system. It includes user details (username, email, names) and their associated roles (`Set<Role>`). It also includes the unique `entraId` obtained from Microsoft Entra ID for authentication. **(Previously used password field is now inactive due to Entra ID integration).**
+    *   **Consistency:** Ensures that a User object maintains valid state (e.g., required fields like `email` and `entraId`). Role assignments are managed to maintain relationships.
 *   **Role Aggregate:**
     *   **Aggregate Root:** `Role.java`
     *   **Description:** Represents a user role (e.g., STUDENT, STAFF, ADMIN). It's a simpler aggregate containing the role's ID and name (`ERole`).
@@ -61,25 +61,31 @@ Aggregates are clusters of domain objects that can be treated as a single unit. 
 
 Domain events represent significant occurrences within the domain that other parts of the system might be interested in. They help decouple components.
 
-*   **`UserRegisteredEvent`**
-    *   **Description:** Published when a new user successfully registers.
+*   **`UserRegisteredEvent`** (Note: Currently Not Published to RabbitMQ)
+    *   **Description:** Published when a new user successfully registers (This event is associated with the older JWT-based registration/login flow, which is currently inactive due to the switch to Microsoft Entra ID authentication). If the JWT flow is reactivated, this event would be triggered.
     *   **Data:** Contains `userId`, `username`, `email`, and `registeredAt` timestamp.
+    *   **Current Handling:** Handled internally by `UserEventListener` for logging purposes only.
     *   **Potential Listeners:** Could trigger welcome emails, create default profiles in other services, etc.
-*   **`UserProfileUpdatedEvent`**
-    *   **Description:** Published when a user's profile information (e.g., email) is updated.
-    *   **Data:** Contains `userId`, `oldEmail`, `newEmail`, and `updatedAt` timestamp.
-    *   **Potential Listeners:** Could trigger notifications, update data caches, synchronize information with other systems.
+*   **`UserProfileUpdatedEvent`** (Published to RabbitMQ)
+    *   **Description:** Published when a user's profile information (specifically, first name or last name) is updated via the `PUT /api/users/{id}` endpoint.
+    *   **Data:** Contains `userId`, `oldEmail`, `newEmail`, and `updatedAt` timestamp. (Note: The current implementation sends the same email for old and new as email updates are not handled via this endpoint).
+    *   **Current Handling:** Handled internally by `UserEventListener` for logging, AND published to the `campus_events_exchange` Topic Exchange on RabbitMQ with the routing key `user.profile.updated` by `UserProfileEventListener`.
+    *   **Potential Listeners:** Could trigger notifications, update data caches in other services, synchronize information with other systems.
 
-Currently, these events are published using Spring's `ApplicationEventPublisher` and handled by `UserEventListener` for logging purposes within the same service.
+**RabbitMQ Integration Status:**
+*   The service successfully **publishes** the `UserProfileUpdatedEvent` to RabbitMQ.
+*   The service **does not currently consume/listen** to any events from RabbitMQ.
+*   The main exchange used is `campus_events_exchange` (Topic type).
 
 ## API Endpoints
 
-Refer to the Swagger UI (`http://localhost:8080/swagger-ui.html`) for a detailed and interactive API documentation.
+Refer to the Swagger UI (`http://localhost:8081/swagger-ui.html`) for a detailed and interactive API documentation. Authentication for protected endpoints requires a valid Bearer token obtained from Microsoft Entra ID.
 
 Key endpoints include:
 
-*   `POST /api/auth/register`: Register a new user.
-*   `POST /api/auth/login`: Authenticate a user and get a JWT token.
-*   `GET /api/users/{id}`: Get user details by ID (Requires authentication).
-*   `PUT /api/users/{id}`: Update user details (Requires authentication).
-*   `GET /api/me`: Get the current authenticated user's details (Requires authentication). 
+*   `GET /api/users/me`: Get the current authenticated user's details (Requires Entra ID authentication).
+*   `GET /api/users/{id}`: Get user details by internal database ID (Requires Entra ID authentication).
+*   `PUT /api/users/{id}`: Update the authenticated user's `firstName` and `lastName` (Requires Entra ID authentication, publishes `UserProfileUpdatedEvent`).
+*   `GET /api/users/entra/{entraId}`: Get user details by Entra ID (OID) (Requires Entra ID authentication and potentially specific roles like ADMIN).
+
+*Note: The older JWT-based `/api/auth/register` and `/api/auth/login` endpoints are currently inactive due to the migration to Microsoft Entra ID.* 

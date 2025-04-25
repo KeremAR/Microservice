@@ -12,10 +12,11 @@ import {
   VStack, // Vertical Stack for layout
   Heading, // For the main title
   FormControl, // For Input labels (optional but good practice)
-  // Icon, // Could be used for the flag dropdown later
+  Divider, // Import Divider
 } from '@gluestack-ui/themed';
-import { Stack, useRouter } from 'expo-router'; // Import useRouter
+import { Stack, useRouter, Redirect } from 'expo-router'; // Import Redirect
 import { Alert } from 'react-native'; // Import Alert for feedback
+import { useAuth } from '../context/AuthContext'; // Import useAuth
 
 // Assuming the logo path is correct relative to the root
 const logo = require('../assets/images/au-logo.png');
@@ -23,22 +24,34 @@ const logo = require('../assets/images/au-logo.png');
 // const flag = require('../assets/images/uk-flag.png'); // Example
 
 // Mock user data
-const MOCK_EMAIL = 'test@test.com';
-const MOCK_PASSWORD = 'Password';
+// const MOCK_EMAIL = 'test@test.com';
+// const MOCK_PASSWORD = 'Password';
 
 export default function LoginScreen() {
   const router = useRouter(); // Initialize router
+  const { signIn, isLoading: isAuthLoading, accessToken } = useAuth(); // Get auth state and functions
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isEmailPasswordLoading, setIsEmailPasswordLoading] = useState(false); // Separate loading state for email/password
 
-  const handleLogin = () => {
-    if (email.toLowerCase() === MOCK_EMAIL && password === MOCK_PASSWORD) {
-      // Navigate to the main app screen group
-      router.replace('/(app)'); // Reverted back to group path
-    } else {
-      Alert.alert('Login Failed', 'Invalid email or password.');
-    }
+  const handleEmailPasswordLogin = () => {
+    setIsEmailPasswordLoading(true);
+    // Replace mock logic with actual API call if needed
+    // For now, just show an alert or disable it
+    Alert.alert('Info', 'Email/Password login needs to be implemented.');
+    setIsEmailPasswordLoading(false);
+    // if (email.toLowerCase() === MOCK_EMAIL && password === MOCK_PASSWORD) {
+    //   router.replace('/(tabs)'); // Navigate on success
+    // } else {
+    //   Alert.alert('Login Failed', 'Invalid email or password.');
+    // }
   };
+
+  // No need for explicit redirect here, layout handles it based on accessToken
+  // if (accessToken) {
+  //     return <Redirect href="/(app)" />;
+  // }
 
   return (
     <Box flex={1} justifyContent="center" alignItems="center" bg="$white" p="$5">
@@ -58,6 +71,27 @@ export default function LoginScreen() {
         {/* Title */}
         <Heading size="2xl">Campus Caution</Heading>
 
+        {/* Microsoft Login Button */}
+        <Button
+          size="lg"
+          variant="solid"
+          action="primary"
+          bg="$blueGray600" // Or a Microsoft-like blue?
+          onPress={() => signIn()} // Call the signIn function from AuthContext
+          isDisabled={isAuthLoading} // Disable while auth is loading
+          w="100%" // Make button full width
+        >
+          {/* You can add a Microsoft logo here if desired */}
+          <ButtonText>{isAuthLoading ? 'Loading...' : 'Sign In with Microsoft'}</ButtonText>
+        </Button>
+
+        {/* Divider */}
+        <Box flexDirection="row" alignItems="center" w="100%" my="$4">
+          <Divider flex={1} />
+          <Text mx="$3" color="$textLight500">OR</Text>
+          <Divider flex={1} />
+        </Box>
+
         {/* Email Input */}
         <FormControl w="100%">
           {/* Optional: Add <FormControlLabel><FormControlLabelText>Email</FormControlLabelText></FormControlLabel> */}
@@ -69,6 +103,7 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              $disabled={isAuthLoading || isEmailPasswordLoading}
             />
           </Input>
         </FormControl>
@@ -83,6 +118,7 @@ export default function LoginScreen() {
               type="password"
               value={password}
               onChangeText={setPassword}
+              $disabled={isAuthLoading || isEmailPasswordLoading}
             />
           </Input>
           {/* Use onPress on the Link instead of href for navigation */}
@@ -91,21 +127,22 @@ export default function LoginScreen() {
           </Link>
         </FormControl>
 
-        {/* Buttons */}
-        <VStack space="md" w="100%" mt="$5">
-          <Button
-            size="lg"
-            variant="solid"
-            action="primary"
-            bg="$blue800"
-            onPress={handleLogin}
-          >
-            <ButtonText>Sign In</ButtonText>
-          </Button>
-          <Button size="lg" variant="outline" action="secondary" onPress={() => router.push('/signup')}>
-            <ButtonText>Sign Up</ButtonText>
-          </Button>
-        </VStack>
+        {/* Email/Password Sign In Button */}
+        <Button
+          size="lg"
+          variant="solid"
+          action="primary"
+          bg="$blue800"
+          onPress={handleEmailPasswordLogin}
+          isDisabled={isAuthLoading || isEmailPasswordLoading}
+          w="100%"
+        >
+          <ButtonText>{isEmailPasswordLoading ? 'Signing In...' : 'Sign In'}</ButtonText>
+        </Button>
+
+        <Button size="lg" variant="outline" action="secondary" onPress={() => router.push('/signup')} w="100%" isDisabled={isAuthLoading || isEmailPasswordLoading}>
+          <ButtonText>Sign Up</ButtonText>
+        </Button>
 
         {/* Language Selector Placeholder */}
         {/* Replace with actual flag image/component */}

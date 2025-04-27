@@ -14,6 +14,7 @@ interface AuthContextData {
   user: any | null; // Consider defining a specific user type
   isLoading: boolean;
   signIn: () => Promise<void>;
+  handleLoginSuccess: (data: { token: string; id: number; email: string; roles: string[] }) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -204,6 +205,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     await promptAsync();
   };
 
+  // +++ Handle Email/Password Login Success Function +++
+  const handleLoginSuccess = async (data: { token: string; id: number; email: string; roles: string[] }) => {
+    console.log("Handling email/password login success:", data);
+    try {
+      const { token, ...userData } = data; // Separate token from user data
+      setAccessToken(token);
+      setUser(userData); // Set user state with data from signin response
+      await SecureStore.setItemAsync('accessToken', token);
+      // No need to fetch user info again, we got it from the signin response
+      // await fetchUserInfo(token); 
+    } catch (e) {
+      console.error("Error storing token or setting user state after email/password login:", e);
+      // Optionally clear state if storing fails
+      setAccessToken(null);
+      setUser(null);
+      await SecureStore.deleteItemAsync('accessToken');
+    }
+  };
+  // +++ End Handle Email/Password Login Success Function +++
+
   // --- Sign Out Function ---
   const signOut = async () => {
     try {
@@ -221,7 +242,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ accessToken, user, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ accessToken, user, isLoading, signIn, handleLoginSuccess, signOut }}>
       {children}
     </AuthContext.Provider>
   );

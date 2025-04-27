@@ -75,6 +75,7 @@ The project uses a Domain-Driven Design (DDD) approach.
   "category": "Infrastructure",
   "photoUrl": "https://example.com/photo.jpg",
   "userId": "12345",
+  "departmentId": "dept-123",
   "status": "Pending",
   "createdAt": "2025-04-20T12:00:00Z"
 }
@@ -94,6 +95,8 @@ Example event payload:
   "Id": "608d5e47b6f1a3c6c03fef01",
   "Title": "Broken sidewalk tile",
   "UserId": "user-123",
+  "DepartmentId": "dept-123",
+  "Category": "Infrastructure",
   "CreatedAt": "2025-04-20T14:22:00Z"
 }
 ```
@@ -101,6 +104,7 @@ Example event payload:
 > 📂 Publisher Class: `Messaging/RabbitMQProducer.cs`
 
 ---
+
 
 ## 🐳 Docker Compose Setup
 
@@ -161,5 +165,6 @@ http://localhost:5240/swagger
 - MongoDB used for flexible data storage.
 - Docker Compose configured for multi-container orchestration.
 - API easily testable through Swagger UI.
+- Department integration for cross-service communication.
 
 ---

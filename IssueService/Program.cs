@@ -22,7 +22,7 @@ builder.Services.AddScoped<IIssueRepository, IssueRepository>();
 builder.Services.AddScoped<IIssueService, IssueServiceImpl>();
 
 // RabbitMQ Producer
-builder.Services.AddSingleton<IRabbitMQProducer, RabbitMQProducer>();
+builder.Services.AddSingleton<IssueService.Messaging.Interfaces.IRabbitMQProducer, IssueService.Messaging.Implementations.RabbitMQProducer>();
 
 // Controllers
 builder.Services.AddControllers();

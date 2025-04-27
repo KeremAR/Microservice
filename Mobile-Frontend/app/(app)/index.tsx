@@ -7,23 +7,21 @@ import {
   ButtonText,
   VStack,
   Heading,
-  ScrollView, // To allow scrolling if content exceeds screen height
-  HStack, // For horizontal layout in announcement cards
+  ScrollView,
+  HStack,
   Icon,
   Pressable,
-  // LinearGradient, // Remove from gluestack import
 } from '@gluestack-ui/themed';
-import { LinearGradient } from 'expo-linear-gradient'; // Import from expo
-import { ArrowRight, HelpCircle } from 'lucide-react-native'; // Icons for announcements and help card
-import { Link } from 'expo-router'; // For linking announcements (optional)
+import { LinearGradient } from 'expo-linear-gradient';
+import { ArrowRight, HelpCircle } from 'lucide-react-native';
+import { Link } from 'expo-router';
 
-// Mock Data for Announcements
 const mockAnnouncements = [
   {
     id: '1',
     title: 'Resolved: Wi-Fi Connectivity Issues in the Library',
     description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore...',
-    link: '/announcements/1', // Example link
+    link: '/announcements/1',
   },
   {
     id: '2',
@@ -31,33 +29,21 @@ const mockAnnouncements = [
     description: 'Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum...',
     link: '/announcements/2',
   },
-  // Add more announcements as needed
 ];
 
-// Mock Data for Banner
 const bannerText = 'Together, we make our campus better.';
-// Placeholder for banner image
-// const bannerImage = require('../assets/images/home-banner.png');
-
-// Placeholder for help card image
-// const helpImage = require('../assets/images/need-help.png');
 
 export default function HomeScreen() {
   return (
     <ScrollView bg="$white" flex={1}>
       <VStack space="lg" pb="$16">
-
-        {/* Banner Section */}
-        <Box position="relative" h={200}> {/* Adjust height as needed */}
-          {/* Example Gradient Background */}
+        <Box position="relative" h={200}>
           <LinearGradient
-            colors={['#FDBA74', '#F9A8D4']} // Use actual color strings, Gluestack tokens might not work here
-            start={[0, 0]} // Correct array format
-            end={[1, 1]}   // Correct array format
+            colors={['#FDBA74', '#F9A8D4']}
+            start={[0, 0]}
+            end={[1, 1]}
             style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
           />
-          {/* Add banner image here later */}
-          {/* <Image source={bannerImage} alt="Banner" ... /> */}
           <Box flex={1} justifyContent="center" alignItems="flex-end" p="$5">
             <Text color="$black" fontSize="$lg" fontWeight="$bold" maxWidth="60%">
               {bannerText}
@@ -65,23 +51,20 @@ export default function HomeScreen() {
           </Box>
         </Box>
 
-        {/* Need Help Card Section */}
         <Box
-          bg="$backgroundLight100" // Lighter background for the card
-          borderRadius="$2xl" // More rounded corners from image
+          bg="$backgroundLight100"
+          borderRadius="$2xl"
           p="$5"
-          mx="$3" // Add horizontal margin
+          mx="$3"
           alignItems="center"
           borderColor="$borderLight200"
           borderWidth={1}
         >
           <VStack space="md" alignItems="center">
-             {/* Placeholder for help image */}
-             <Box bg="$yellow200" borderRadius="$full" p="$3" mb="$2">
-                <Icon as={HelpCircle} size="xl" color="$yellow600" />
-             </Box>
-            {/* <Image source={helpImage} alt="Need Help" size="md" resizeMode="contain" mb="$2" /> */}
-            <Heading size="lg">Need Help?</Heading>
+            <Box bg="$yellow200" borderRadius="$full" p="$3" mb="$2">
+              <Icon as={HelpCircle} size="xl" color="$yellow600" />
+            </Box>
+            <Text fontSize="$xl" fontWeight="bold">Need Help?</Text>
             <Text textAlign="center">
               If you encounter any issues on campus, please report them here to help us improve your experience
             </Text>
@@ -91,9 +74,8 @@ export default function HomeScreen() {
           </VStack>
         </Box>
 
-        {/* Announcements Section */}
-        <VStack space="md" px="$3"> {/* Add horizontal padding */}
-          <Heading size="lg">Announcements:</Heading>
+        <VStack space="md" px="$3">
+          <Text fontSize="$xl" fontWeight="bold" mb="$2">Announcements:</Text>
           {mockAnnouncements.map((item) => (
             <Link href={item.link as any} key={item.id} asChild>
               <Pressable>

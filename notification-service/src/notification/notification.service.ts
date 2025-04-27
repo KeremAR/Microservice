@@ -3,24 +3,29 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import * as nodemailer from 'nodemailer';
+import { NotificationEventPublisher } from './domain/events/notification.event.publisher';
+import { NotificationCreatedEvent, NotificationReadEvent, NotificationDeletedEvent } from './domain/events/notification.event';
 
 @Injectable()
 export class NotificationService {
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null = null;
 
   constructor(
     @InjectRepository(Notification)
     private notificationRepository: Repository<Notification>,
+    private readonly eventPublisher: NotificationEventPublisher
   ) {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT),
-      secure: true,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: true,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+    }
   }
 
   async createNotification(userId: string, title: string, message: string) {
@@ -31,7 +36,20 @@ export class NotificationService {
     });
 
     await this.notificationRepository.save(notification);
-    await this.sendEmail(userId, title, message);
+    
+    if (this.transporter) {
+      await this.sendEmail(userId, title, message);
+    }
+    
+    // Event yayınla
+    await this.eventPublisher.publish(
+      new NotificationCreatedEvent(
+        notification.id,
+        userId,
+        title,
+        message
+      )
+    );
     
     return notification;
   }
@@ -56,8 +74,18 @@ export class NotificationService {
     });
   }
 
-  async markAsRead(id: string) {
-    await this.notificationRepository.update(id, { isRead: true });
-    return this.notificationRepository.findOne({ where: { id } });
+  async markAsRead(notificationId: string, userId: string) {
+    await this.notificationRepository.update(notificationId, { isRead: true });
+    await this.eventPublisher.publish(
+      new NotificationReadEvent(notificationId, userId)
+    );
+    return this.notificationRepository.findOne({ where: { id: notificationId } });
+  }
+
+  async deleteNotification(notificationId: string, userId: string) {
+    await this.notificationRepository.delete(notificationId);
+    await this.eventPublisher.publish(
+      new NotificationDeletedEvent(notificationId, userId)
+    );
   }
 } 

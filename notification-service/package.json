@@ -6,6 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
+    "start:prod": "node dist/main",
     "build": "nest build"
   },
   "keywords": [],

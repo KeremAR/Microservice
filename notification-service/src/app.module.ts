@@ -9,12 +9,12 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     ConfigModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT) || 5432,
-      username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      database: process.env.DB_NAME || 'notification',
-      entities: [],
+      host: process.env.DATABASE_HOST || 'postgres',
+      port: parseInt(process.env.DATABASE_PORT) || 5432,
+      username: process.env.DATABASE_USERNAME || 'postgres',
+      password: process.env.DATABASE_PASSWORD || 'postgres',
+      database: process.env.DATABASE_NAME || 'notification_db',
+      entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
     }),
     ClientsModule.register([
@@ -22,8 +22,8 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
         name: 'NOTIFICATION_SERVICE',
         transport: Transport.RMQ,
         options: {
-          urls: [process.env.RABBITMQ_URL || 'amqp://localhost:5672'],
-          queue: 'notification_queue',
+          urls: [process.env.RABBITMQ_URL || 'amqp://rabbitmq:5672'],
+          queue: 'notification_events',
           queueOptions: {
             durable: true,
           },

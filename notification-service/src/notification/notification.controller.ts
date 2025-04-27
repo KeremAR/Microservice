@@ -1,18 +1,20 @@
-import { Controller, Get, Post, Body, Param, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { Notification } from './entities/notification.entity';
 
-@Controller('notifications')
+@Controller('notification')
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
   @Post()
   async createNotification(
-    @Body('userId') userId: string,
-    @Body('title') title: string,
-    @Body('message') message: string,
+    @Body() body: { userId: string; title: string; message: string }
   ): Promise<Notification> {
-    return this.notificationService.createNotification(userId, title, message);
+    return this.notificationService.createNotification(
+      body.userId,
+      body.title,
+      body.message
+    );
   }
 
   @Get(':userId')
@@ -21,7 +23,18 @@ export class NotificationController {
   }
 
   @Put(':id/read')
-  async markAsRead(@Param('id') id: string): Promise<Notification> {
-    return this.notificationService.markAsRead(id);
+  async markAsRead(
+    @Param('id') id: string,
+    @Body() body: { userId: string }
+  ): Promise<Notification> {
+    return this.notificationService.markAsRead(id, body.userId);
+  }
+
+  @Delete(':id')
+  async deleteNotification(
+    @Param('id') id: string,
+    @Body() body: { userId: string }
+  ): Promise<void> {
+    return this.notificationService.deleteNotification(id, body.userId);
   }
 } 

@@ -20,6 +20,8 @@ public class IssueCreatedHandler : INotificationHandler<IssueCreatedEvent>
             Id = notification.Issue.Id.ToString(),
             Title = notification.Issue.Title,
             UserId = notification.Issue.UserId,
+            DepartmentId = notification.Issue.DepartmentId,
+            Category = notification.Issue.Category,
             CreatedAt = notification.Issue.CreatedAt
         };
 

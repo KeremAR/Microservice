@@ -29,7 +29,8 @@ public class IssueServiceImpl : IIssueService
             description: request.Description,
             category: request.Category,
             photoUrl: request.PhotoUrl,
-            userId: request.UserId);
+            userId: request.UserId,
+            departmentId: request.DepartmentId);
 
         // 2) MongoDB'ye kaydet
         await _repository.CreateAsync(issue);

@@ -1,0 +1,10 @@
+.env
+.idea/
+*.iml
+.DS_Store
+vcs.xml
+misc.xml
+modules.xml
+compiler.xml
+encodings.xml
+jarRepositories.xml

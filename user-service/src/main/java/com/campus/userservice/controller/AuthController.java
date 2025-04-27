@@ -2,17 +2,28 @@ package com.campus.userservice.controller;
 
 import com.campus.userservice.model.ERole;
 import com.campus.userservice.model.User;
+import com.campus.userservice.payload.request.LoginRequest;
 import com.campus.userservice.payload.request.SignUpRequest;
+import com.campus.userservice.payload.response.JwtResponse;
 import com.campus.userservice.payload.response.MessageResponse;
 import com.campus.userservice.repository.UserRepository;
+import com.campus.userservice.security.jwt.JwtUtils;
+import com.campus.userservice.security.services.UserDetailsServiceImpl;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
@@ -20,10 +31,16 @@ import java.util.Set;
 public class AuthController {
 
     @Autowired
+    AuthenticationManager authenticationManager;
+
+    @Autowired
     UserRepository userRepository;
 
     @Autowired
     PasswordEncoder encoder;
+
+    @Autowired
+    JwtUtils jwtUtils;
 
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) {
@@ -51,11 +68,28 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
     }
     
-    // We can add a signin endpoint here later
-    /*
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        // Authentication logic using email/password will go here
+
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        String jwt = jwtUtils.generateJwtToken(authentication);
+        
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();        
+        
+        // Fetch the User entity to get the ID
+        User user = userRepository.findByEmail(userDetails.getUsername()) // getUsername() returns the email here
+                .orElseThrow(() -> new RuntimeException("Error: User not found after authentication.")); // Should not happen
+
+        List<String> roles = userDetails.getAuthorities().stream()
+                .map(item -> item.getAuthority())
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(new JwtResponse(jwt, 
+                                                 user.getId(), 
+                                                 user.getEmail(), // Use email from User entity
+                                                 roles));
     }
-    */
 } 

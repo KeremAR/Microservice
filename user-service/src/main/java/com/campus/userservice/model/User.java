@@ -39,7 +39,6 @@ public class User {
     private String email;
 
     @Size(max = 120)
-    @NotBlank
     private String password;
     
     @Column(unique = true, nullable = true)

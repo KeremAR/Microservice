@@ -50,32 +50,34 @@ This service utilizes some concepts from Domain-Driven Design (DDD).
 Aggregates are clusters of domain objects that can be treated as a single unit. They ensure data consistency within their boundaries.
 
 *   **User Aggregate:**
-    *   **Aggregate Root:** `User.java`
-    *   **Description:** Represents a user in the system. It includes user details (username, email, names) and their associated roles (`Set<Role>`). It also includes the unique `entraId` obtained from Microsoft Entra ID for authentication. **(Previously used password field is now inactive due to Entra ID integration).**
-    *   **Consistency:** Ensures that a User object maintains valid state (e.g., required fields like `email` and `entraId`). Role assignments are managed to maintain relationships.
+    *   **Aggregate Root:** `User.java` (`src/main/java/com/campus/userservice/model/User.java`)
+    *   **Description:** Represents a user in the system. It includes user details (email, names) and their associated roles (`Set<ERole>`). It includes the unique `entraId` obtained from Microsoft Entra ID which is the primary identifier for authentication. **Note:** The `username` and `password` fields still exist in the entity but are considered inactive for the primary authentication flow which relies on Entra ID.
+    *   **Consistency:** Ensures that a User object maintains valid state (e.g., required fields like `email`). Role assignments are managed via the `roles` collection.
 *   **Role Aggregate:**
-    *   **Aggregate Root:** `Role.java`
-    *   **Description:** Represents a user role (e.g., STUDENT, STAFF, ADMIN). It's a simpler aggregate containing the role's ID and name (`ERole`).
+    *   **Aggregate Root:** `ERole.java` (Enum used within `User`) (`src/main/java/com/campus/userservice/model/ERole.java`)
+    *   **Description:** Represents a user role (e.g., STUDENT, STAFF, ADMIN) as an Enum (`ERole`). It's embedded within the `User` aggregate.
 
 ### Domain Events
 
-Domain events represent significant occurrences within the domain that other parts of the system might be interested in. They help decouple components.
+Domain events represent significant occurrences within the domain.
 
-*   **`UserRegisteredEvent`** (Note: Currently Not Published to RabbitMQ)
-    *   **Description:** Published when a new user successfully registers (This event is associated with the older JWT-based registration/login flow, which is currently inactive due to the switch to Microsoft Entra ID authentication). If the JWT flow is reactivated, this event would be triggered.
+*   **`UserRegisteredEvent`** (`src/main/java/com/campus/userservice/domain/events/UserRegisteredEvent.java`)
+    *   **Description:** Associated with the older, **currently inactive**, JWT-based registration flow. If that flow were reactivated, this event would signify a new user registration.
     *   **Data:** Contains `userId`, `username`, `email`, and `registeredAt` timestamp.
-    *   **Current Handling:** Handled internally by `UserEventListener` for logging purposes only.
-    *   **Potential Listeners:** Could trigger welcome emails, create default profiles in other services, etc.
-*   **`UserProfileUpdatedEvent`** (Published to RabbitMQ)
-    *   **Description:** Published when a user's profile information (specifically, first name or last name) is updated via the `PUT /api/users/{id}` endpoint.
-    *   **Data:** Contains `userId`, `oldEmail`, `newEmail`, and `updatedAt` timestamp. (Note: The current implementation sends the same email for old and new as email updates are not handled via this endpoint).
-    *   **Current Handling:** Handled internally by `UserEventListener` for logging, AND published to the `campus_events_exchange` Topic Exchange on RabbitMQ with the routing key `user.profile.updated` by `UserProfileEventListener`.
-    *   **Potential Listeners:** Could trigger notifications, update data caches in other services, synchronize information with other systems.
+    *   **Current Handling:** Handled internally by `UserEventListener` (`.../domain/listeners/UserEventListener.java`) for logging purposes only. **It is NOT published to RabbitMQ.**
+*   **`UserProfileUpdatedEvent`** (`src/main/java/com/campus/userservice/domain/events/UserProfileUpdatedEvent.java`)
+    *   **Description:** Published when a user's profile information (`firstName` or `lastName`) is updated via the `PUT /api/users/{id}` endpoint.
+    *   **Data:** Contains `userId`, `oldEmail`, `newEmail` (currently sends the user's current email for both fields as email updates are not handled via this specific event/endpoint), and `updatedAt` timestamp.
+    *   **Current Handling:**
+        *   Logged internally by `UserEventListener`.
+        *   Published to the `campus_events_exchange` Topic Exchange on RabbitMQ with the routing key `user.profile.updated` by `UserProfileEventListener` (`.../domain/listeners/UserProfileEventListener.java`).
+    *   **Potential Listeners:** Other services interested in user profile changes (e.g., notification service, issue service).
 
 **RabbitMQ Integration Status:**
 *   The service successfully **publishes** the `UserProfileUpdatedEvent` to RabbitMQ.
-*   The service **does not currently consume/listen** to any events from RabbitMQ.
+*   The service **does not currently consume/listen** to any events *from* RabbitMQ.
 *   The main exchange used is `campus_events_exchange` (Topic type).
+*   RabbitMQ configuration is managed in `RabbitMQConfig.java` (`src/main/java/com/campus/userservice/config/RabbitMQConfig.java`).
 
 ## API Endpoints
 
@@ -86,6 +88,6 @@ Key endpoints include:
 *   `GET /api/users/me`: Get the current authenticated user's details (Requires Entra ID authentication).
 *   `GET /api/users/{id}`: Get user details by internal database ID (Requires Entra ID authentication).
 *   `PUT /api/users/{id}`: Update the authenticated user's `firstName` and `lastName` (Requires Entra ID authentication, publishes `UserProfileUpdatedEvent`).
-*   `GET /api/users/entra/{entraId}`: Get user details by Entra ID (OID) (Requires Entra ID authentication and potentially specific roles like ADMIN).
+*   `GET /api/users/entra/{entraId}`: Get user details by Entra ID (OID) (Requires Entra ID authentication).
 
 *Note: The older JWT-based `/api/auth/register` and `/api/auth/login` endpoints are currently inactive due to the migration to Microsoft Entra ID.* 

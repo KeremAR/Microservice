@@ -29,23 +29,53 @@ const logo = require('../assets/images/au-logo.png');
 
 export default function LoginScreen() {
   const router = useRouter(); // Initialize router
-  const { signIn, isLoading: isAuthLoading, accessToken } = useAuth(); // Get auth state and functions
+  const { signIn, isLoading: isAuthLoading, accessToken, handleLoginSuccess } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isEmailPasswordLoading, setIsEmailPasswordLoading] = useState(false); // Separate loading state for email/password
+  const [isEmailPasswordLoading, setIsEmailPasswordLoading] = useState(false);
 
-  const handleEmailPasswordLogin = () => {
+  // Get API Base URL from context or define it here
+  // It might be better to get this from context or a constants file
+  const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.105:8082/api';
+
+  const handleEmailPasswordLogin = async () => {
+    if (!email || !password) {
+        Alert.alert('Login Failed', 'Please enter both email and password.');
+        return;
+    }
+    
     setIsEmailPasswordLoading(true);
-    // Replace mock logic with actual API call if needed
-    // For now, just show an alert or disable it
-    Alert.alert('Info', 'Email/Password login needs to be implemented.');
-    setIsEmailPasswordLoading(false);
-    // if (email.toLowerCase() === MOCK_EMAIL && password === MOCK_PASSWORD) {
-    //   router.replace('/(tabs)'); // Navigate on success
-    // } else {
-    //   Alert.alert('Login Failed', 'Invalid email or password.');
-    // }
+    try {
+        console.log(`Attempting login for ${email} to ${apiBaseUrl}/auth/signin`);
+        const response = await fetch(`${apiBaseUrl}/auth/signin`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+        });
+
+        const responseData = await response.json(); // Try to parse JSON regardless of status for error messages
+
+        if (response.ok) {
+            console.log("Login successful:", responseData);
+            // Call the handler from AuthContext
+            await handleLoginSuccess(responseData); 
+            // Navigation should be handled by the AuthProvider based on accessToken change
+            // router.replace('/(tabs)'); // Or let the layout handle redirect
+        } else {
+            console.error("Login failed:", response.status, responseData);
+            // Display error message from backend if available, otherwise generic message
+            const errorMessage = responseData?.message || 'Invalid email or password.'; 
+            Alert.alert('Login Failed', errorMessage);
+        }
+    } catch (error) {
+        console.error("Login error:", error);
+        Alert.alert('Login Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+        setIsEmailPasswordLoading(false);
+    }
   };
 
   // No need for explicit redirect here, layout handles it based on accessToken
@@ -103,7 +133,7 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              $disabled={isAuthLoading || isEmailPasswordLoading}
+              isDisabled={isAuthLoading || isEmailPasswordLoading}
             />
           </Input>
         </FormControl>
@@ -118,7 +148,7 @@ export default function LoginScreen() {
               type="password"
               value={password}
               onChangeText={setPassword}
-              $disabled={isAuthLoading || isEmailPasswordLoading}
+              isDisabled={isAuthLoading || isEmailPasswordLoading}
             />
           </Input>
           {/* Use onPress on the Link instead of href for navigation */}

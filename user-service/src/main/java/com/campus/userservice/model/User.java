@@ -17,8 +17,7 @@ import java.util.Set;
 @Table(name = "users", 
        uniqueConstraints = {
            @UniqueConstraint(columnNames = "username"),
-           @UniqueConstraint(columnNames = "email"),
-           @UniqueConstraint(columnNames = "entraId")
+           @UniqueConstraint(columnNames = "email")
        })
 @Data
 @NoArgsConstructor
@@ -30,16 +29,20 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(length = 50)
+    @Column(length = 50, unique = true, nullable = true)
     private String username;
     
     @NotBlank
     @Size(max = 50)
     @Email
+    @Column(unique = true, nullable = false)
     private String email;
-    
-    @Column(unique = true, nullable = false, updatable = false)
+
+    @Size(max = 120)
     @NotBlank
+    private String password;
+    
+    @Column(unique = true, nullable = true)
     private String entraId;
     
     @Size(max = 50)

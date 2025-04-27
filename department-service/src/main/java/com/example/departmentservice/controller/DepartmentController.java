@@ -32,4 +32,10 @@ public class DepartmentController {
         return new ResponseEntity<>(createdDepartment, HttpStatus.CREATED);
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<Department> getDepartmentById(@PathVariable Long id) {
+        Department department = departmentService.getDepartmentById(id);
+        return new ResponseEntity<>(department, HttpStatus.OK);
+    }
+
 }

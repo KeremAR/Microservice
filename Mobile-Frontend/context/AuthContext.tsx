@@ -25,6 +25,7 @@ const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 const tenantId = process.env.EXPO_PUBLIC_TENANT_ID;
 const clientId = process.env.EXPO_PUBLIC_MOBILE_APP_CLIENT_ID;
 const userServiceClientId = process.env.EXPO_PUBLIC_USER_SERVICE_CLIENT_ID;
+const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.105:8082/api'; // Use correct IP and port
 
 // Basic validation to ensure variables are loaded
 if (!tenantId || !clientId || !userServiceClientId) {
@@ -38,6 +39,7 @@ const redirectUri = makeRedirectUri({
 
 // --- Log the actual redirect URI being used ---
 console.log("Using Redirect URI:", redirectUri);
+console.log("Using API Base URL:", apiBaseUrl); // Log API base URL
 // ----------------------------------------------
 
 // Endpoint discovery configuration
@@ -61,9 +63,42 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any | null>(null); // Store user info if needed
-  const [isLoading, setIsLoading] = useState<boolean>(true); // Start loading until token checked
-  const [codeVerifier, setCodeVerifier] = useState<string | null>(null); // State to store code_verifier
+  const [user, setUser] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [codeVerifier, setCodeVerifier] = useState<string | null>(null);
+
+  // --- Fetch User Info Function ---
+  const fetchUserInfo = async (token: string) => {
+    console.log("Fetching user info with token...");
+    try {
+      const response = await fetch(`${apiBaseUrl}/users/me`, { // Use template literal for URL
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        console.log("User info received:", userData);
+        setUser(userData);
+        // Optionally store user data for persistence
+        // await SecureStore.setItemAsync('user', JSON.stringify(userData));
+      } else {
+        console.error("Failed to fetch user info:", response.status, await response.text());
+        // Handle non-OK response (e.g., token expired, unauthorized)
+        // Maybe trigger signOut() if status is 401 or 403
+        if (response.status === 401 || response.status === 403) {
+          // Consider signing out if unauthorized
+          // await signOut(); // Be careful with potential loops if signOut also clears user
+        }
+        setUser(null); // Clear user state on fetch error
+      }
+    } catch (error) {
+      console.error("Error fetching user info:", error);
+      setUser(null); // Clear user state on network or other errors
+    }
+  };
+  // --- End Fetch User Info Function ---
 
   // --- Authentication Request Hook ---
   const [request, response, promptAsync] = useAuthRequest(
@@ -115,27 +150,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           },
           discovery // Pass the discovery object containing the token endpoint
         )
-        .then((tokenResponse) => {
+        .then(async (tokenResponse) => {
           console.log("Token exchange successful:", tokenResponse.accessToken ? 'Token received' : 'No token in response', tokenResponse);
           if (tokenResponse.accessToken) {
             const receivedToken = tokenResponse.accessToken;
             setAccessToken(receivedToken);
-            SecureStore.setItemAsync('accessToken', receivedToken);
-            // You might want to store the refresh token as well
+            await SecureStore.setItemAsync('accessToken', receivedToken);
+            // Fetch user info immediately after getting the token
+            await fetchUserInfo(receivedToken);
             if (tokenResponse.refreshToken) {
-              SecureStore.setItemAsync('refreshToken', tokenResponse.refreshToken);
+              await SecureStore.setItemAsync('refreshToken', tokenResponse.refreshToken);
             }
-            // Optionally decode id_token for user info
-            // if (tokenResponse.idToken) { ... }
           } else {
             console.error("Token exchange failed, response did not contain access_token:", tokenResponse);
-            // Handle error
+             setUser(null); // Clear user if token exchange fails
           }
-          // No need to setIsLoading(false) here, loaded token effect handles it
         })
         .catch((error) => {
           console.error("Token exchange error with exchangeCodeAsync:", error);
-          // Handle error, maybe signOut()
+           setUser(null); // Clear user on exchange error
         });
 
       } else if (response.type === 'error') {
@@ -151,15 +184,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const loadToken = async () => {
       try {
         const storedToken = await SecureStore.getItemAsync('accessToken');
-        // You might also load stored user info here
         if (storedToken) {
           setAccessToken(storedToken);
-          // Optional: Validate token expiry here before setting state
-          // const storedUser = await SecureStore.getItemAsync('user');
-          // if (storedUser) setUser(JSON.parse(storedUser));
+          // Fetch user info if token exists
+          await fetchUserInfo(storedToken);
         }
       } catch (e) {
         console.error("Failed to load token from storage", e);
+        // setUser(null); // Ensure user is null if token load fails
       } finally {
         setIsLoading(false);
       }
@@ -175,16 +207,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // --- Sign Out Function ---
   const signOut = async () => {
     try {
-      // Optional: Revoke token via Microsoft endpoint if needed
       setAccessToken(null);
-      setUser(null);
+      setUser(null); // Ensure user state is cleared on sign out
       await SecureStore.deleteItemAsync('accessToken');
-      await SecureStore.deleteItemAsync('user'); // Clear stored user info
-      // Clear browser cookies/session if necessary (might require more complex handling)
-       if (Platform.OS !== 'web') { // WebBrowser only available on native
-          await WebBrowser.openAuthSessionAsync(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/logout?post_logout_redirect_uri=${encodeURIComponent(redirectUri)}`, redirectUri);
-        }
-
+      await SecureStore.deleteItemAsync('refreshToken'); // Clear refresh token too
+      // await SecureStore.deleteItemAsync('user'); // Clear stored user info if you implemented it
+      if (Platform.OS !== 'web') {
+        await WebBrowser.openAuthSessionAsync(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/logout?post_logout_redirect_uri=${encodeURIComponent(redirectUri)}`, redirectUri);
+      }
     } catch (e) {
       console.error("Failed to sign out", e);
     }

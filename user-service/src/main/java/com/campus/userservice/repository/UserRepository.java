@@ -13,6 +13,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Find user by Microsoft Entra ID Object ID
     Optional<User> findByEntraId(String entraId);
 
+    // Find user by email
+    Optional<User> findByEmail(String email);
+
     Boolean existsByUsername(String username);
     
     Boolean existsByEmail(String email);

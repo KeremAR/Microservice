@@ -100,34 +100,74 @@ public class UserController {
     }
     
     @GetMapping("/me")
-    @Operation(summary = "Get current user", description = "Retrieves the currently authenticated user's profile. Creates the profile if it doesn't exist.")
+    @Operation(summary = "Get current user", description = "Retrieves the currently authenticated user's profile. Creates/Updates the profile if needed.")
     @Transactional
     public ResponseEntity<User> getCurrentUser(@AuthenticationPrincipal Jwt principal) {
+        System.out.println("--- JWT Claims Start ---");
+        principal.getClaims().forEach((key, value) -> {
+            System.out.println(key + ": " + value);
+        });
+        System.out.println("--- JWT Claims End ---");
+        
         String entraId = principal.getClaimAsString("oid");
         if (entraId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
 
-        User user = userRepository.findByEntraId(entraId).orElseGet(() -> {
+        // Try to find user by Entra ID first
+        Optional<User> userOptional = userRepository.findByEntraId(entraId);
+
+        if (userOptional.isPresent()) {
+            // User found by Entra ID, return it
+            return ResponseEntity.ok(userOptional.get());
+        } else {
+            // User not found by Entra ID, try to find by email or create new
             String email = principal.getClaimAsString("email");
-            if (email != null && userRepository.existsByEmail(email)) {
-                throw new IllegalStateException("User with email " + email + " already exists, but Entra ID mismatch.");
+            if (email == null || email.isBlank()) {
+                email = principal.getClaimAsString("preferred_username");
+                System.out.println("Email claim missing or blank, using preferred_username: " + email);
             }
-            
-            User newUser = User.builder()
+
+            if (email != null && !email.isBlank()) {
+                // Try to find user by email
+                Optional<User> userByEmailOptional = userRepository.findByEmail(email);
+
+                if (userByEmailOptional.isPresent()) {
+                    // User found by email, update its Entra ID and other details
+                    User existingUser = userByEmailOptional.get();
+                    System.out.println("User found by email (" + email + "), updating Entra ID to: " + entraId);
+                    existingUser.setEntraId(entraId);
+                    existingUser.setFirstName(principal.getClaimAsString("given_name"));
+                    existingUser.setLastName(principal.getClaimAsString("family_name"));
+                    existingUser.setUsername(principal.getClaimAsString("preferred_username") != null ? principal.getClaimAsString("preferred_username") : email);
+                    // Optionally update roles if needed, or keep existing ones
+                    // existingUser.setRoles(getDefaultUserRoles()); 
+                    User updatedUser = userRepository.save(existingUser);
+                    return ResponseEntity.ok(updatedUser);
+                } else {
+                    // User not found by Entra ID or email, create new user
+                    User newUser = createNewUserFromJwt(principal, entraId, email);
+                    return ResponseEntity.ok(userRepository.save(newUser));
+                }
+            } else {
+                // Cannot find by Entra ID and no valid email found in token, cannot proceed
+                 System.err.println("Cannot find user by Entra ID and email claim is missing or blank in token. Cannot create or identify user.");
+                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null); // Or UNAUTHORIZED?
+            }
+        }
+    }
+
+    // Helper method to create a new user
+    private User createNewUserFromJwt(Jwt principal, String entraId, String email) {
+         System.out.println("Creating new user profile for Entra ID: " + entraId + " with email: " + email);
+         return User.builder()
                 .entraId(entraId)
                 .email(email)
                 .firstName(principal.getClaimAsString("given_name"))
                 .lastName(principal.getClaimAsString("family_name"))
-                .username(principal.getClaimAsString("preferred_username"))
-                .roles(getDefaultUserRoles()) 
+                .username(principal.getClaimAsString("preferred_username") != null ? principal.getClaimAsString("preferred_username") : email)
+                .roles(getDefaultUserRoles())
                 .build();
-            
-            System.out.println("Creating new user profile for Entra ID: " + entraId);
-            return userRepository.save(newUser);
-        });
-
-        return ResponseEntity.ok(user);
     }
     
     private Set<Role> getDefaultUserRoles() {

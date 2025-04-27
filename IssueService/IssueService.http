@@ -1,0 +1,23 @@
+@baseUrl = http://localhost:5240
+
+### Create a new issue
+POST {{baseUrl}}/issues/report
+Content-Type: application/json
+
+{
+    "title": "Test Issue",
+    "description": "This is a test issue",
+    "category": "Bug",
+    "photoUrl": "http://example.com/photo.jpg",
+    "userId": "user123"
+}
+
+### Get an issue by ID
+# @name getIssue
+GET {{baseUrl}}/issues/{{issueId}}
+
+### Update issue status
+PUT {{baseUrl}}/issues/{{issueId}}/status
+Content-Type: application/json
+
+"Resolved"

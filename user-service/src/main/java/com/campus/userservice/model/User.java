@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
+import com.campus.userservice.model.ERole;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -20,44 +22,39 @@ import java.util.Set;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class User {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @NotBlank
-    @Size(max = 20)
+    @Column(length = 50, unique = true, nullable = true)
     private String username;
     
     @NotBlank
     @Size(max = 50)
     @Email
+    @Column(unique = true, nullable = false)
     private String email;
-    
-    @NotBlank
+
     @Size(max = 120)
+    @NotBlank
     private String password;
     
-    @NotBlank
+    @Column(unique = true, nullable = true)
+    private String entraId;
+    
     @Size(max = 50)
     private String firstName;
     
-    @NotBlank
     @Size(max = 50)
     private String lastName;
     
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(name = "user_roles", 
-              joinColumns = @JoinColumn(name = "user_id"),
-              inverseJoinColumns = @JoinColumn(name = "role_id"))
-    private Set<Role> roles = new HashSet<>();
-    
-    public User(String username, String email, String password, String firstName, String lastName) {
-        this.username = username;
-        this.email = email;
-        this.password = password;
-        this.firstName = firstName;
-        this.lastName = lastName;
-    }
+    @ElementCollection(targetClass = ERole.class, fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles_enum", joinColumns = @JoinColumn(name = "user_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role")
+    @Builder.Default
+    private Set<ERole> roles = new HashSet<>();
 } 

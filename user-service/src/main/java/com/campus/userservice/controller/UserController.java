@@ -2,10 +2,8 @@ package com.campus.userservice.controller;
 
 import com.campus.userservice.dto.UserUpdateRequest;
 import com.campus.userservice.model.User;
-import com.campus.userservice.model.Role;
 import com.campus.userservice.model.ERole;
 import com.campus.userservice.repository.UserRepository;
-import com.campus.userservice.repository.RoleRepository;
 import com.campus.userservice.domain.events.UserProfileUpdatedEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -27,6 +25,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
@@ -37,9 +36,6 @@ public class UserController {
     
     @Autowired
     private UserRepository userRepository;
-    
-    @Autowired
-    private RoleRepository roleRepository;
     
     @Autowired
     private ApplicationEventPublisher eventPublisher;
@@ -100,7 +96,7 @@ public class UserController {
     }
     
     @GetMapping("/me")
-    @Operation(summary = "Get current user", description = "Retrieves the currently authenticated user's profile. Creates/Updates the profile if needed.")
+    @Operation(summary = "Get current user", description = "Retrieves the currently authenticated user's profile. Creates/Updates the profile, including roles from token.")
     @Transactional
     public ResponseEntity<User> getCurrentUser(@AuthenticationPrincipal Jwt principal) {
         System.out.println("--- JWT Claims Start ---");
@@ -114,14 +110,19 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
 
-        // Try to find user by Entra ID first
+        // Extract roles from JWT, default to empty set if null
+        Set<ERole> rolesFromToken = extractRolesFromJwt(principal);
+
         Optional<User> userOptional = userRepository.findByEntraId(entraId);
 
         if (userOptional.isPresent()) {
-            // User found by Entra ID, return it
-            return ResponseEntity.ok(userOptional.get());
+            User existingUser = userOptional.get();
+            // Update user details from token, including roles
+            updateUserFromJwt(existingUser, principal, rolesFromToken);
+            User savedUser = userRepository.save(existingUser);
+            return ResponseEntity.ok(savedUser);
         } else {
-            // User not found by Entra ID, try to find by email or create new
+            // User not found by Entra ID, try by email
             String email = principal.getClaimAsString("email");
             if (email == null || email.isBlank()) {
                 email = principal.getClaimAsString("preferred_username");
@@ -129,53 +130,70 @@ public class UserController {
             }
 
             if (email != null && !email.isBlank()) {
-                // Try to find user by email
                 Optional<User> userByEmailOptional = userRepository.findByEmail(email);
 
                 if (userByEmailOptional.isPresent()) {
-                    // User found by email, update its Entra ID and other details
+                    // User found by email, update Entra ID and other details including roles
                     User existingUser = userByEmailOptional.get();
                     System.out.println("User found by email (" + email + "), updating Entra ID to: " + entraId);
-                    existingUser.setEntraId(entraId);
-                    existingUser.setFirstName(principal.getClaimAsString("given_name"));
-                    existingUser.setLastName(principal.getClaimAsString("family_name"));
-                    existingUser.setUsername(principal.getClaimAsString("preferred_username") != null ? principal.getClaimAsString("preferred_username") : email);
-                    // Optionally update roles if needed, or keep existing ones
-                    // existingUser.setRoles(getDefaultUserRoles()); 
-                    User updatedUser = userRepository.save(existingUser);
-                    return ResponseEntity.ok(updatedUser);
+                    existingUser.setEntraId(entraId); // Link the account
+                    updateUserFromJwt(existingUser, principal, rolesFromToken); // Update other details and roles
+                    User savedUser = userRepository.save(existingUser);
+                    return ResponseEntity.ok(savedUser);
                 } else {
-                    // User not found by Entra ID or email, create new user
-                    User newUser = createNewUserFromJwt(principal, entraId, email);
+                    // User not found by Entra ID or email, create new user with roles from token
+                    User newUser = createNewUserFromJwt(principal, entraId, email, rolesFromToken);
                     return ResponseEntity.ok(userRepository.save(newUser));
                 }
             } else {
-                // Cannot find by Entra ID and no valid email found in token, cannot proceed
                  System.err.println("Cannot find user by Entra ID and email claim is missing or blank in token. Cannot create or identify user.");
-                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null); // Or UNAUTHORIZED?
+                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null); 
             }
         }
     }
 
-    // Helper method to create a new user
-    private User createNewUserFromJwt(Jwt principal, String entraId, String email) {
-         System.out.println("Creating new user profile for Entra ID: " + entraId + " with email: " + email);
+    // Helper method to update existing user details from JWT
+    private void updateUserFromJwt(User user, Jwt principal, Set<ERole> rolesFromToken) {
+        user.setFirstName(principal.getClaimAsString("given_name"));
+        user.setLastName(principal.getClaimAsString("family_name"));
+        // Ensure username is also updated or set correctly
+        String preferredUsername = principal.getClaimAsString("preferred_username");
+        user.setUsername(preferredUsername != null ? preferredUsername : user.getEmail()); 
+        user.setRoles(rolesFromToken); // Update roles from token
+        System.out.println("Updating user (" + user.getEmail() + ") roles from token: " + rolesFromToken);
+    }
+
+    // Helper method to create a new user from JWT
+    private User createNewUserFromJwt(Jwt principal, String entraId, String email, Set<ERole> rolesFromToken) {
+         System.out.println("Creating new user profile for Entra ID: " + entraId + " with email: " + email + " and roles: " + rolesFromToken);
          return User.builder()
                 .entraId(entraId)
                 .email(email)
                 .firstName(principal.getClaimAsString("given_name"))
                 .lastName(principal.getClaimAsString("family_name"))
                 .username(principal.getClaimAsString("preferred_username") != null ? principal.getClaimAsString("preferred_username") : email)
-                .roles(getDefaultUserRoles())
+                .roles(rolesFromToken) // Use roles from token
                 .build();
     }
     
-    private Set<Role> getDefaultUserRoles() {
-        Set<Role> roles = new HashSet<>();
-        Role userRole = roleRepository.findByName(Role.ERole.ROLE_STUDENT)
-                .orElseThrow(() -> new RuntimeException("Error: Default role ROLE_STUDENT not found."));
-        roles.add(userRole);
-        return roles;
+    // Helper method to extract roles from JWT claim
+    private Set<ERole> extractRolesFromJwt(Jwt principal) {
+        List<String> roleStrings = principal.getClaimAsStringList("roles");
+        if (roleStrings == null) {
+            System.out.println("No 'roles' claim found in JWT. Assigning empty set.");
+            return new HashSet<>();
+        }
+        return roleStrings.stream()
+                .map(roleString -> {
+                    try {
+                        return ERole.valueOf(roleString);
+                    } catch (IllegalArgumentException e) {
+                        System.err.println("Warning: Unknown role value in JWT roles claim: " + roleString + ". Ignoring.");
+                        return null; // Ignore unknown roles
+                    }
+                })
+                .filter(Objects::nonNull) // Filter out nulls from unknown roles
+                .collect(Collectors.toSet());
     }
     
     @GetMapping("/entra/{entraId}")

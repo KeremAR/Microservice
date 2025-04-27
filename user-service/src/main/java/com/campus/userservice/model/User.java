@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import com.campus.userservice.model.ERole;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -47,9 +48,10 @@ public class User {
     @Size(max = 50)
     private String lastName;
     
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(name = "user_roles", 
-              joinColumns = @JoinColumn(name = "user_id"),
-              inverseJoinColumns = @JoinColumn(name = "role_id"))
-    private Set<Role> roles = new HashSet<>();
+    @ElementCollection(targetClass = ERole.class, fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles_enum", joinColumns = @JoinColumn(name = "user_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role")
+    @Builder.Default
+    private Set<ERole> roles = new HashSet<>();
 } 

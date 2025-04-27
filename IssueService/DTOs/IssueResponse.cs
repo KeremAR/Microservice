@@ -10,6 +10,7 @@ public class IssueResponse
     public string Category { get; set; }
     public string PhotoUrl { get; set; }
     public string UserId { get; set; }
+    public string DepartmentId { get; set; }
     public string Status { get; set; }
     public DateTime CreatedAt { get; set; }
 
@@ -21,6 +22,7 @@ public class IssueResponse
         Category = issue.Category;
         PhotoUrl = issue.PhotoUrl;
         UserId = issue.UserId;
+        DepartmentId = issue.DepartmentId;
         Status = issue.Status.ToString();
         CreatedAt = issue.CreatedAt;
     }

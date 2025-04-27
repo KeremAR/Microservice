@@ -7,4 +7,5 @@ public class CreateIssueRequest
     public string Category { get; set; }
     public string PhotoUrl { get; set; }
     public string UserId { get; set; }
+    public string DepartmentId { get; set; }
 }

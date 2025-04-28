@@ -1,3 +1,21 @@
+# Campus Caution - Mobile Frontend
+
+This is the Expo mobile application for the Campus Issue Management System (Campus Caution) for Akdeniz University.
+
+## Overview
+
+The purpose of this application is to allow users (likely students and staff) to:
+
+*   Authenticate using either their Akdeniz University Microsoft account (Entra ID) or via email/password registration/login.
+*   View campus announcements.
+*   Report issues encountered on campus (feature likely initiated by the "Inform Us" button on the home screen).
+*   View their user profile and log out.
+*   (Future features may include tracking reported issues and viewing notifications).
+
+The application connects to the backend `user-service` for authentication and user data, and likely other backend services for issue reporting and announcements.
+
+---
+
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).

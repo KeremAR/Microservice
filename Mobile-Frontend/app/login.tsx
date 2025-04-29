@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Text,
@@ -29,59 +29,15 @@ const logo = require('../assets/images/au-logo.png');
 
 export default function LoginScreen() {
   const router = useRouter(); // Initialize router
-  const { signIn, isLoading: isAuthLoading, accessToken, handleLoginSuccess } = useAuth();
+  const { login, isLoading, isAuthenticated } = useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isEmailPasswordLoading, setIsEmailPasswordLoading] = useState(false);
-
-  // Get API Base URL from context or define it here
-  // It might be better to get this from context or a constants file
-  const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.105:8082/api';
-
-  const handleEmailPasswordLogin = async () => {
-    if (!email || !password) {
-        Alert.alert('Login Failed', 'Please enter both email and password.');
-        return;
+  // Auth0 ile giriş başarılı olduğunda direkt (app) yönlendirmesi
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log("Login Screen: User is authenticated, redirecting to app");
+      router.replace('/(app)');
     }
-    
-    setIsEmailPasswordLoading(true);
-    try {
-        console.log(`Attempting login for ${email} to ${apiBaseUrl}/auth/signin`);
-        const response = await fetch(`${apiBaseUrl}/auth/signin`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, password }),
-        });
-
-        const responseData = await response.json(); // Try to parse JSON regardless of status for error messages
-
-        if (response.ok) {
-            console.log("Login successful:", responseData);
-            // Call the handler from AuthContext
-            await handleLoginSuccess(responseData); 
-            // Navigation should be handled by the AuthProvider based on accessToken change
-            // router.replace('/(tabs)'); // Or let the layout handle redirect
-        } else {
-            console.error("Login failed:", response.status, responseData);
-            // Display error message from backend if available, otherwise generic message
-            const errorMessage = responseData?.message || 'Invalid email or password.'; 
-            Alert.alert('Login Failed', errorMessage);
-        }
-    } catch (error) {
-        console.error("Login error:", error);
-        Alert.alert('Login Error', 'An unexpected error occurred. Please try again.');
-    } finally {
-        setIsEmailPasswordLoading(false);
-    }
-  };
-
-  // No need for explicit redirect here, layout handles it based on accessToken
-  // if (accessToken) {
-  //     return <Redirect href="/(app)" />;
-  // }
+  }, [isAuthenticated, router]);
 
   return (
     <Box flex={1} justifyContent="center" alignItems="center" bg="$white" p="$5">
@@ -101,76 +57,28 @@ export default function LoginScreen() {
         {/* Title */}
         <Heading size="2xl">Campus Caution</Heading>
 
-        {/* Microsoft Login Button */}
-        <Button
-          size="lg"
-          variant="solid"
-          action="primary"
-          bg="$blueGray600" // Or a Microsoft-like blue?
-          onPress={() => signIn()} // Call the signIn function from AuthContext
-          isDisabled={isAuthLoading} // Disable while auth is loading
-          w="100%" // Make button full width
-        >
-          {/* You can add a Microsoft logo here if desired */}
-          <ButtonText>{isAuthLoading ? 'Loading...' : 'Sign In with Microsoft'}</ButtonText>
-        </Button>
-
-        {/* Divider */}
-        <Box flexDirection="row" alignItems="center" w="100%" my="$4">
-          <Divider flex={1} />
-          <Text mx="$3" color="$textLight500">OR</Text>
-          <Divider flex={1} />
-        </Box>
-
-        {/* Email Input */}
-        <FormControl w="100%">
-          {/* Optional: Add <FormControlLabel><FormControlLabelText>Email</FormControlLabelText></FormControlLabel> */}
-          <Input variant="underlined">
-            <InputField
-              placeholder="Email"
-              type="text"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              isDisabled={isAuthLoading || isEmailPasswordLoading}
-            />
-          </Input>
-        </FormControl>
-
-        {/* Password Input */}
-        <FormControl w="100%">
-          {/* Optional: Add <FormControlLabel><FormControlLabelText>Password</FormControlLabelText></FormControlLabel> */}
-          <Input variant="underlined">
-            {/* Add InputSlot and Icon for show/hide password later if needed */}
-            <InputField
-              placeholder="Password"
-              type="password"
-              value={password}
-              onChangeText={setPassword}
-              isDisabled={isAuthLoading || isEmailPasswordLoading}
-            />
-          </Input>
-          {/* Use onPress on the Link instead of href for navigation */}
-          <Link onPress={() => router.push('/forgot-password')} alignSelf="flex-end" mt="$2">
-            <LinkText size="sm">I Forget My Password</LinkText>
-          </Link>
-        </FormControl>
-
-        {/* Email/Password Sign In Button */}
+        {/* Auth0 Login Button */}
         <Button
           size="lg"
           variant="solid"
           action="primary"
           bg="$blue800"
-          onPress={handleEmailPasswordLogin}
-          isDisabled={isAuthLoading || isEmailPasswordLoading}
-          w="100%"
+          onPress={() => login()} // Call the login function from AuthContext
+          isDisabled={isLoading} // Disable while auth is loading
+          w="100%" // Make button full width
         >
-          <ButtonText>{isEmailPasswordLoading ? 'Signing In...' : 'Sign In'}</ButtonText>
+          <ButtonText>{isLoading ? 'Loading...' : 'Sign In with Auth0'}</ButtonText>
         </Button>
 
-        <Button size="lg" variant="outline" action="secondary" onPress={() => router.push('/signup')} w="100%" isDisabled={isAuthLoading || isEmailPasswordLoading}>
+        {/* Sign Up Button */}
+        <Button 
+          size="lg" 
+          variant="outline" 
+          action="secondary" 
+          onPress={() => router.push('/signup')} 
+          w="100%" 
+          isDisabled={isLoading}
+        >
           <ButtonText>Sign Up</ButtonText>
         </Button>
 

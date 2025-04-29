@@ -9,7 +9,7 @@ import { GluestackUIProvider, Spinner, Box } from '@gluestack-ui/themed';
 import { config } from '@gluestack-ui/config';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { AuthProvider, useAuth } from '../context/AuthContext';
+import { Auth0ProviderWithRedirectCallback, useAuth } from '../context/AuthContext';
 
 // Keep preventing auto-hide at the top level
 SplashScreen.preventAutoHideAsync();
@@ -26,24 +26,24 @@ export default function RootLayoutNav() {
 
   // Fonts are loaded, proceed to render the main layout with AuthProvider
   return (
-    <AuthProvider>
+    <Auth0ProviderWithRedirectCallback>
       <GluestackUIProvider config={config}>
         <RootLayout /> 
       </GluestackUIProvider>
-    </AuthProvider>
+    </Auth0ProviderWithRedirectCallback>
   );
 }
 
 function RootLayout() {
   const colorScheme = useColorScheme();
-  const { accessToken, isLoading } = useAuth();
+  const { isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const segments = useSegments();
   const [isNavigationComplete, setIsNavigationComplete] = useState(false);
 
   // Effect for navigation based on auth state
   useEffect(() => {
-    console.log("Auth Effect Running - isLoading:", isLoading, "accessToken:", !!accessToken, "segments:", segments);
+    console.log("Auth Effect Running - isLoading:", isLoading, "isAuthenticated:", isAuthenticated, "segments:", segments);
     
     if (isLoading) {
         console.log("Auth Effect: Still loading, doing nothing.");
@@ -56,18 +56,23 @@ function RootLayout() {
 
     // Check segments length to avoid errors on initial load if segments are empty
     if (segments.length > 0) { 
-        if (accessToken && !inAuthGroup) {
+        if (isAuthenticated && !inAuthGroup) {
           console.log("Auth Effect: Signed in, replacing route to (app)");
           router.replace('/(app)'); 
           navigated = true;
-        } else if (!accessToken && inAuthGroup) {
+        } else if (!isAuthenticated && inAuthGroup) {
           console.log("Auth Effect: Signed out, replacing route to login");
           router.replace('/login');
           navigated = true;
         }
+    } else if (isAuthenticated) {
+      // Eğer segments boşsa ama authentication varsa, direkt ana sayfaya yönlendir
+      console.log("Auth Effect: No segments but authenticated, forcing route to (app)");
+      router.replace('/(app)');
+      navigated = true;
     }
     
-    // If no navigation happened but accessToken is loaded, 
+    // If no navigation happened but auth state is loaded, 
     // ensure navigation state is marked complete.
     if (!navigated) {
          console.log("Auth Effect: No navigation needed or initial load.");
@@ -76,7 +81,7 @@ function RootLayout() {
     setIsNavigationComplete(true);
     console.log(`Auth Effect: Navigation check complete. (Navigated: ${navigated})`);
 
-  }, [isLoading, accessToken, segments, router]);
+  }, [isLoading, isAuthenticated, segments, router]);
 
   // Effect for hiding the splash screen *after* loading and navigation check
   useEffect(() => {

@@ -66,3 +66,74 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Auth0 Entegrasyonu
+
+Bu uygulama, kullanıcı kimlik doğrulaması için Auth0'u kullanır. Eksiksiz bir entegrasyon için lütfen aşağıdaki adımları izleyin:
+
+### 1. Auth0 Uygulama Yapılandırması
+
+1. [Auth0 Dashboard](https://manage.auth0.com)'a giriş yapın
+2. **Applications > Applications** bölümüne gidin
+3. Uygulamanız için oluşturulan **lTvrmyoiU2wz2TQGaGUuAL4dBYZOAQAX** client ID'li uygulamayı seçin
+4. **Settings** sekmesinde:
+   - **Allowed Callback URLs**: `exp://192.168.1.X:8081/--/expo-auth-session` olarak ayarlayın (kendi IP adresinizi kullanın)
+   - **Allowed Logout URLs**: `exp://192.168.1.X:8081/--/expo-auth-session` olarak ayarlayın
+   - **Allowed Web Origins**: `exp://192.168.1.X:8081` olarak ayarlayın
+   - **Save Changes** düğmesine tıklayın
+
+### 2. Custom Email İçin Auth0 Rules Eklemek (isteğe bağlı)
+
+Access token içerisinde e-posta alanınızı görmek istiyorsanız (normalde ID token içerisinde bulunur):
+
+1. [Auth0 Dashboard](https://manage.auth0.com)'da **Auth Pipeline > Rules** bölümüne gidin
+2. **Create Rule** düğmesine tıklayın
+3. "Empty Rule" şablonunu seçin
+4. Kural için bir isim verin (örneğin "Add email to Access Token")
+5. Aşağıdaki kodu ekleyin:
+
+```javascript
+function (user, context, callback) {
+  // Add Email claim to the access_token
+  context.accessToken['https://campuscaution.app/email'] = user.email;
+  
+  // Ek olarak e-postanın doğrulanmış olup olmadığı bilgisini de ekleyebilirsiniz
+  context.accessToken['https://campuscaution.app/email_verified'] = user.email_verified;
+  
+  return callback(null, user, context);
+}
+```
+
+6. **Save Changes** düğmesine tıklayın
+
+Bu kural, uygulamanızın access token içerisinde de kullanıcı e-posta bilgisine erişmesini sağlar.
+
+### 3. Uygulama Yapılandırmasını Güncelleme
+
+`app.json` dosyasındaki Auth0 domain bilgisi doğru olmalıdır:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "react-native-auth0",
+        {
+          "domain": "dev-7uv8h746tp02jius.eu.auth0.com"
+        }
+      ]
+    ]
+  }
+}
+```
+
+Ayrıca `context/AuthContext.tsx` dosyasında doğru domain ve clientId bilgilerinin olduğunu doğrulayın:
+
+```tsx
+<Auth0Provider 
+  domain="dev-7uv8h746tp02jius.eu.auth0.com"
+  clientId="lTvrmyoiU2wz2TQGaGUuAL4dBYZOAQAX"
+>
+```
+
+Auth0 entegrasyonu tamamlandı! Şimdi uygulamanız Auth0 kimlik doğrulama sistemiyle çalışabilir.

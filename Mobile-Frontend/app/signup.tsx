@@ -15,9 +15,11 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { Alert, KeyboardAvoidingView, ScrollView, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native'; // Import Alert for feedback and other necessary imports
+import { useAuth } from '../context/AuthContext'; // Auth0 hook'unu ekleyelim
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { login, isLoading: auth0Loading } = useAuth(); // Auth0 hook'undan login fonksiyonunu alalım
 
   // State for form fields
   const [firstName, setFirstName] = useState('');
@@ -76,6 +78,18 @@ export default function SignUpScreen() {
     }
   };
 
+  // Auth0 ile kayıt ol/giriş yap
+  const handleAuth0Signup = async () => {
+    try {
+      // Auth0 login işlemi, kayıt ekranını da içerir
+      await login();
+      // Başarılı giriş sonrası router işlemi AuthContext tarafından yönetilir
+    } catch (error) {
+      console.error("Auth0 signup/login error:", error);
+      Alert.alert('Auth0 Error', 'Failed to connect to Auth0. Please try again.');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
@@ -99,6 +113,25 @@ export default function SignUpScreen() {
               <Text size="md" textAlign="center">
                 Welcome! Fill out the information below to create a new account and get started right away.
               </Text>
+
+              {/* Auth0 Signup Button */}
+              <Button 
+                size="lg" 
+                variant="solid" 
+                action="primary" 
+                bg="$blue600" 
+                mt="$5"
+                onPress={handleAuth0Signup}
+                isDisabled={isLoading || auth0Loading}
+              >
+                <ButtonText>{auth0Loading ? 'Processing...' : 'Sign Up with Auth0'}</ButtonText>
+              </Button>
+
+              <Box flexDirection="row" alignItems="center" w="100%" my="$4">
+                <Box flex={1} h="$px" bg="$trueGray300" />
+                <Text mx="$3" color="$trueGray500">OR</Text>
+                <Box flex={1} h="$px" bg="$trueGray300" />
+              </Box>
 
               <VStack space="md" mt="$5">
                 <FormControl isDisabled={isLoading}>

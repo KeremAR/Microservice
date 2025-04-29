@@ -34,7 +34,13 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "react-native-auth0",
+        {
+          "domain": "${process.env.EXPO_PUBLIC_AUTH0_DOMAIN}"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

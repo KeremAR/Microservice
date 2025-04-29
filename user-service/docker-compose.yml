@@ -14,7 +14,7 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/userservice
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
-      - AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      - AUTH0_DOMAIN=dev-7uv8h746tp02jius.eu.auth0.com
       - AUTH0_AUDIENCE=https://api.campus-caution-v2.com
     networks:
       - campus-caution-network

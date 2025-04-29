@@ -24,6 +24,8 @@ import com.campuscaution.user_service.service.UserService;
 @RequestMapping("/api")
 public class UserController {
 
+    private static final String NAMESPACE = "https://yourapp.com/";
+    
     @Autowired
     private UserService userService;
 
@@ -34,6 +36,10 @@ public class UserController {
 
     @GetMapping("/users/me")
     public ResponseEntity<UserDto> getCurrentUser(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        
         String auth0Id = jwt.getSubject();
         Optional<User> userOpt = userService.getUserByAuth0Id(auth0Id);
         
@@ -42,14 +48,61 @@ public class UserController {
             UserDto userDto = convertToDto(user);
             return ResponseEntity.ok(userDto);
         } else {
-            return ResponseEntity.notFound().build();
+            // Create a new user if not found
+            User newUser = new User();
+            newUser.setAuth0Id(auth0Id);
+            
+            // Get email from namespace
+            String email = (String) jwt.getClaim(NAMESPACE + "email");
+            if (email == null || email.isEmpty()) {
+                email = auth0Id + "@defaultmail.com";
+            }
+            newUser.setEmail(email);
+            
+            // Get name from namespace
+            String name = (String) jwt.getClaim(NAMESPACE + "name");
+            if (name == null || name.isEmpty()) {
+                name = "User " + auth0Id.substring(auth0Id.lastIndexOf('|') + 1);
+            }
+            newUser.setName(name);
+            
+            // Get role from namespace, default to STUDENT
+            String role = (String) jwt.getClaim(NAMESPACE + "role");
+            if (role == null || role.isEmpty()) {
+                role = "STUDENT";
+            }
+            newUser.setRole(role);
+            
+            User savedUser = userService.createUser(newUser);
+            return ResponseEntity.ok(convertToDto(savedUser));
         }
     }
 
     @PostMapping("/users")
     public ResponseEntity<UserDto> createUser(@RequestBody UserDto userDto, @AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        
         User user = convertToEntity(userDto);
         user.setAuth0Id(jwt.getSubject());
+        
+        // Check required fields
+        if (user.getEmail() == null || user.getEmail().isEmpty()) {
+            String email = (String) jwt.getClaim(NAMESPACE + "email");
+            if (email == null || email.isEmpty()) {
+                email = jwt.getSubject() + "@defaultmail.com";
+            }
+            user.setEmail(email);
+        }
+        
+        if (user.getName() == null || user.getName().isEmpty()) {
+            String name = (String) jwt.getClaim(NAMESPACE + "name");
+            if (name == null || name.isEmpty()) {
+                name = "User " + jwt.getSubject().substring(jwt.getSubject().lastIndexOf('|') + 1);
+            }
+            user.setName(name);
+        }
         
         User savedUser = userService.createUser(user);
         return new ResponseEntity<>(convertToDto(savedUser), HttpStatus.CREATED);
@@ -70,6 +123,10 @@ public class UserController {
     @PutMapping("/users/{id}")
     public ResponseEntity<UserDto> updateUser(@PathVariable Long id, @RequestBody UserDto userDto, 
                                              @AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        
         Optional<User> userOpt = userService.getUserById(id);
         
         if (userOpt.isPresent()) {
@@ -83,13 +140,23 @@ public class UserController {
             }
             
             // Update user fields from DTO
-            user.setName(userDto.getName());
-            user.setEmail(userDto.getEmail());
+            if (userDto.getName() != null && !userDto.getName().isEmpty()) {
+                user.setName(userDto.getName());
+            }
+            
+            if (userDto.getEmail() != null && !userDto.getEmail().isEmpty()) {
+                user.setEmail(userDto.getEmail());
+            }
             
             // Only admin can change these fields
             if (jwt.getClaim("permissions").toString().contains("manage:users")) {
-                user.setRole(userDto.getRole());
-                user.setDepartmentId(userDto.getDepartmentId());
+                if (userDto.getRole() != null && !userDto.getRole().isEmpty()) {
+                    user.setRole(userDto.getRole());
+                }
+                
+                if (userDto.getDepartmentId() != null) {
+                    user.setDepartmentId(userDto.getDepartmentId());
+                }
             }
             
             User updatedUser = userService.updateUser(user);

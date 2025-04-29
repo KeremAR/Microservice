@@ -77,6 +77,38 @@ public class UserController {
             return ResponseEntity.ok(convertToDto(savedUser));
         }
     }
+    
+    @PutMapping("/users/me")
+    public ResponseEntity<UserDto> updateCurrentUser(@RequestBody UserDto userDto, @AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        
+        String auth0Id = jwt.getSubject();
+        Optional<User> userOpt = userService.getUserByAuth0Id(auth0Id);
+        
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            
+            // Update user fields from DTO
+            if (userDto.getName() != null && !userDto.getName().isEmpty()) {
+                user.setName(userDto.getName());
+            }
+            
+            if (userDto.getEmail() != null && !userDto.getEmail().isEmpty()) {
+                user.setEmail(userDto.getEmail());
+            }
+            
+            if (userDto.getDepartmentId() != null) {
+                user.setDepartmentId(userDto.getDepartmentId());
+            }
+            
+            User updatedUser = userService.updateUser(user);
+            return ResponseEntity.ok(convertToDto(updatedUser));
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
 
     @PostMapping("/users")
     public ResponseEntity<UserDto> createUser(@RequestBody UserDto userDto, @AuthenticationPrincipal Jwt jwt) {

@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  app:
+    container_name: user-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/userservice
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      - AUTH0_AUDIENCE=https://api.campus-caution-v2.com
+    networks:
+      - campus-caution-network
+
+  postgres:
+    container_name: user-service-db
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=userservice
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - campus-caution-network
+
+volumes:
+  postgres-data:
+
+networks:
+  campus-caution-network:
+    driver: bridge 

@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres-test:
+    image: postgres:14
+    container_name: notification-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notification_test_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+    networks:
+      - notification-test-network
+
+  rabbitmq-test:
+    image: rabbitmq:3-management
+    container_name: notification-rabbitmq-test
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - notification-test-network
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: notification-service-test
+    environment:
+      NODE_ENV: test
+      DATABASE_HOST: postgres-test
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: notification_test_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq-test:5672
+    depends_on:
+      - postgres-test
+      - rabbitmq-test
+    networks:
+      - notification-test-network
+
+volumes:
+  postgres-test-data:
+
+networks:
+  notification-test-network:
+    driver: bridge 

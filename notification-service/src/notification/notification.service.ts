@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
@@ -28,6 +28,24 @@ export class NotificationService {
     }
   }
 
+  private async sendEmail(userId: string, title: string, message: string): Promise<void> {
+    if (!this.transporter) {
+      return;
+    }
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_USER,
+        to: userId, // Assuming userId is an email address
+        subject: title,
+        text: message,
+      });
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      // Don't throw the error to prevent notification creation failure
+    }
+  }
+
   async createNotification(userId: string, title: string, message: string) {
     const notification = this.notificationRepository.create({
       userId,
@@ -35,36 +53,27 @@ export class NotificationService {
       message,
     });
 
-    await this.notificationRepository.save(notification);
-    
-    if (this.transporter) {
-      await this.sendEmail(userId, title, message);
-    }
-    
-    // Event yayınla
-    await this.eventPublisher.publish(
-      new NotificationCreatedEvent(
-        notification.id,
-        userId,
-        title,
-        message
-      )
-    );
-    
-    return notification;
-  }
+    const savedNotification = await this.notificationRepository.save(notification);
 
-  private async sendEmail(userId: string, title: string, message: string) {
     try {
-      await this.transporter.sendMail({
-        from: process.env.SMTP_FROM,
-        to: userId, // Burada kullanıcının email adresi olmalı
-        subject: title,
-        text: message,
-      });
+      await this.eventPublisher.publish(
+        new NotificationCreatedEvent(
+          savedNotification.id,
+          userId,
+          title,
+          message
+        )
+      );
     } catch (error) {
-      console.error('Email gönderilemedi:', error);
+      console.error('Failed to publish notification created event:', error);
     }
+
+    // Send email notification asynchronously
+    this.sendEmail(userId, title, message).catch(error => {
+      console.error('Failed to send email notification:', error);
+    });
+
+    return savedNotification;
   }
 
   async getNotifications(userId: string) {
@@ -76,16 +85,35 @@ export class NotificationService {
 
   async markAsRead(notificationId: string, userId: string) {
     await this.notificationRepository.update(notificationId, { isRead: true });
-    await this.eventPublisher.publish(
-      new NotificationReadEvent(notificationId, userId)
-    );
-    return this.notificationRepository.findOne({ where: { id: notificationId } });
+    
+    const notification = await this.notificationRepository.findOne({ 
+      where: { id: notificationId } 
+    });
+
+    if (!notification) {
+      throw new NotFoundException(`Notification with ID ${notificationId} not found`);
+    }
+
+    try {
+      await this.eventPublisher.publish(
+        new NotificationReadEvent(notificationId, userId)
+      );
+    } catch (error) {
+      console.error('Failed to publish notification read event:', error);
+    }
+
+    return notification;
   }
 
   async deleteNotification(notificationId: string, userId: string) {
     await this.notificationRepository.delete(notificationId);
-    await this.eventPublisher.publish(
-      new NotificationDeletedEvent(notificationId, userId)
-    );
+    
+    try {
+      await this.eventPublisher.publish(
+        new NotificationDeletedEvent(notificationId, userId)
+      );
+    } catch (error) {
+      console.error('Failed to publish notification deleted event:', error);
+    }
   }
 } 

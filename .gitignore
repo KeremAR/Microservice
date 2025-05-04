@@ -8,3 +8,7 @@ modules.xml
 compiler.xml
 encodings.xml
 jarRepositories.xml
+.node_modules
+node_modules
+expo*
+.expo*

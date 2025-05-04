@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Text,
@@ -15,23 +15,46 @@ import {
   HStack,
   Pressable,
   ScrollView,
+  Spinner
 } from '@gluestack-ui/themed';
 const logo = require('../assets/images/au-logo.png');
 
 import { Stack, useRouter } from 'expo-router';
 import { Alert, Platform } from 'react-native';
+import useCustomAuth from '../hooks/useCustomAuth';
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const { login, loading, error, isAuthenticated, loadSession } = useCustomAuth();
 
-  const handleLogin = () => {
-    // Maintain existing login logic
-    if (email.toLowerCase() === 'test@test.com' && password === 'Password') {
+  // Oturum durumunu kontrol et
+  useEffect(() => {
+    loadSession();
+  }, []);
+
+  // Oturum açılmışsa ana sayfaya yönlendir
+  useEffect(() => {
+    if (isAuthenticated) {
       router.replace('/(app)');
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Login Failed', 'Please enter email and password.');
+      return;
+    }
+
+    const result = await login({ email, password });
+    
+    if (result) {
+      // Başarılı giriş, hook içinde isAuthenticated true olacak ve
+      // yukarıdaki useEffect ile ana sayfaya yönlendirilecek
     } else {
-      Alert.alert('Login Failed', 'Invalid email or password.');
+      // Hata useCustomAuth içinde zaten işleniyor, isteğe bağlı ek bildirim
+      Alert.alert('Login Failed', error?.message || 'Invalid email or password.');
     }
   };
 
@@ -136,6 +159,13 @@ export default function LoginScreen() {
                 </Link>
               </Box>
 
+              {/* Error message */}
+              {error && (
+                <Box mb="$3" p="$2" bg="$red100" borderRadius="$md">
+                  <Text color="$red800" fontSize="$sm">{error.message}</Text>
+                </Box>
+              )}
+
               {/* Login button */}
               <Button
                 size="md"
@@ -144,8 +174,13 @@ export default function LoginScreen() {
                 borderRadius="$lg"
                 onPress={handleLogin}
                 mb="$3"
+                disabled={loading}
               >
-                <ButtonText fontSize="$sm">Login</ButtonText>
+                {loading ? (
+                  <Spinner color="$white" size="small" />
+                ) : (
+                  <ButtonText fontSize="$sm">Login</ButtonText>
+                )}
               </Button>
 
               {/* Or divider */}

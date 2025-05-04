@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "465128947457",
+    "project_id": "user-service-a8931",
+    "storage_bucket": "user-service-a8931.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:465128947457:android:e5372d2d030716f12e6500",
+        "android_client_info": {
+          "package_name": "com.campuscaution.newmobilefrontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRvp3vb3IhP7eUHpZ0Qa4P5zmkLAJX5KA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -5,6 +5,7 @@ using IssueService.Domain.IssueAggregate;
 using IssueService.Repositories.Interfaces;
 using IssueService.Services.Interfaces;
 using MediatR;
+using System.Threading;
 
 namespace IssueService.Services.Implementations;
 
@@ -46,25 +47,25 @@ public class IssueServiceImpl : IIssueService
     {
         var issue = await _repository.GetByIdAsync(id);
         if (issue == null)
-            throw new Exception("Issue not found");
+            throw new KeyNotFoundException("Issue not found");
             
         return new IssueResponse(issue);
     }
 
-    public async Task UpdateIssueStatusAsync(string id, string status)
+    public async Task UpdateIssueStatusAsync(string id, IssueStatus status)
     {
         // 1) DB'den aggregate'ı al
         var issue = await _repository.GetByIdAsync(id);
 
         if (issue == null)
-            throw new Exception("Issue not found");
+            throw new KeyNotFoundException("Issue not found");
 
         // 2) Domain method üzerinden güncelleme yap
-        if (status == "Resolved")
+        if (status == IssueStatus.Resolved)
             issue.Resolve(); // domain event ekler
 
         // 3) DB'de sadece status'u güncelle
-        await _repository.UpdateStatusAsync(id, issue.Status);
+        await _repository.UpdateStatusAsync(id, status);
 
         // 4) Domain event varsa yayınla
         await DispatchEventsAsync(issue);
@@ -74,7 +75,7 @@ public class IssueServiceImpl : IIssueService
     {
         foreach (var @event in issue.Events)
         {
-            await _mediator.Publish(@event);
+            await _mediator.Publish(@event, CancellationToken.None);
         }
 
         issue.ClearEvents();

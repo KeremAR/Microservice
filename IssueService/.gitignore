@@ -1,4 +1,3 @@
-
 # Environment files
 .env
 
@@ -75,12 +74,3 @@ artifacts/
 
 # MongoDB
 *.dat 
-# Node.js
-node_modules/
-.node_modules/
-
-# Expo/React Native
-expo*/
-.expo*/
-
-

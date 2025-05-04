@@ -20,8 +20,18 @@ import com.campuscaution.user_service.dto.UserDto;
 import com.campuscaution.user_service.model.User;
 import com.campuscaution.user_service.service.UserService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/api")
+@Tag(name = "User Management", description = "API for user management operations")
 public class UserController {
 
     private static final String NAMESPACE = "https://yourapp.com/";
@@ -29,13 +39,22 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    @Operation(summary = "Check service health", description = "Public endpoint to check if service is running")
+    @ApiResponse(responseCode = "200", description = "Service is healthy")
     @GetMapping("/public/health")
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("User Service is up and running!");
     }
 
+    @Operation(summary = "Get current user", description = "Get the authenticated user's profile or create a new one if not exists")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "User profile retrieved/created", 
+                content = @Content(schema = @Schema(implementation = UserDto.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/users/me")
-    public ResponseEntity<UserDto> getCurrentUser(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<UserDto> getCurrentUser(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         if (jwt == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -78,8 +97,18 @@ public class UserController {
         }
     }
     
+    @Operation(summary = "Update current user", description = "Update the authenticated user's profile information")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "User profile updated", 
+                content = @Content(schema = @Schema(implementation = UserDto.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @PutMapping("/users/me")
-    public ResponseEntity<UserDto> updateCurrentUser(@RequestBody UserDto userDto, @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<UserDto> updateCurrentUser(
+            @RequestBody UserDto userDto, 
+            @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         if (jwt == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -110,8 +139,17 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Create new user", description = "Create a new user profile")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "User created", 
+                content = @Content(schema = @Schema(implementation = UserDto.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/users")
-    public ResponseEntity<UserDto> createUser(@RequestBody UserDto userDto, @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<UserDto> createUser(
+            @RequestBody UserDto userDto, 
+            @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         if (jwt == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -140,8 +178,16 @@ public class UserController {
         return new ResponseEntity<>(convertToDto(savedUser), HttpStatus.CREATED);
     }
 
+    @Operation(summary = "Get user by ID", description = "Get user profile by ID (admin only)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "User profile found", 
+                content = @Content(schema = @Schema(implementation = UserDto.class))),
+        @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/admin/users/{id}")
-    public ResponseEntity<UserDto> getUserById(@PathVariable Long id) {
+    public ResponseEntity<UserDto> getUserById(
+            @Parameter(description = "User ID", required = true) @PathVariable Long id) {
         Optional<User> userOpt = userService.getUserById(id);
         
         if (userOpt.isPresent()) {
@@ -152,9 +198,20 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Update user", description = "Update user profile by ID")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "User profile updated", 
+                content = @Content(schema = @Schema(implementation = UserDto.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions"),
+        @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @PutMapping("/users/{id}")
-    public ResponseEntity<UserDto> updateUser(@PathVariable Long id, @RequestBody UserDto userDto, 
-                                             @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<UserDto> updateUser(
+            @Parameter(description = "User ID", required = true) @PathVariable Long id,
+            @RequestBody UserDto userDto, 
+            @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         if (jwt == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -198,8 +255,17 @@ public class UserController {
         }
     }
 
-    @DeleteMapping("/admin/users/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+    @Operation(summary = "Delete user", description = "Delete user profile by ID (admin only)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "204", description = "User deleted"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions"),
+        @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(
+            @Parameter(description = "User ID", required = true) @PathVariable Long id) {
         Optional<User> userOpt = userService.getUserById(id);
         
         if (userOpt.isPresent()) {

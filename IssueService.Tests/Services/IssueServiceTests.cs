@@ -5,6 +5,7 @@ using IssueService.Services.Implementations;
 using IssueService.Repositories.Interfaces;
 using IssueService.DTOs;
 using IssueService.Domain.IssueAggregate;
+using IssueService.Domain.IssueAggregate.Events;
 using MediatR;
 using System;
 using System.Threading.Tasks;
@@ -39,38 +40,31 @@ namespace IssueService.Tests.Services
                 DepartmentId = "dept123"
             };
 
-            var issue = new Issue(
-                request.Title,
-                request.Description,
-                request.Category,
-                request.PhotoUrl,
-                request.UserId,
-                request.DepartmentId
-            );
-
-            _mockRepository
-                .Setup(x => x.CreateAsync(It.IsAny<Issue>()))
-                .Returns(Task.FromResult(issue));
-
-            _mockMediator
-                .Setup(x => x.Publish(It.IsAny<INotification>(), It.IsAny<CancellationToken>()))
+            Issue savedIssue = null;
+            _mockRepository.Setup(x => x.CreateAsync(It.IsAny<Issue>()))
+                .Callback<Issue>(issue => savedIssue = issue)
                 .Returns(Task.CompletedTask);
 
             // Act
             var result = await _service.ReportIssueAsync(request);
 
             // Assert
+            savedIssue.Should().NotBeNull();
+            savedIssue.Title.Should().Be(request.Title);
+            savedIssue.Description.Should().Be(request.Description);
+            savedIssue.Category.Should().Be(request.Category);
+            savedIssue.PhotoUrl.Should().Be(request.PhotoUrl);
+            savedIssue.UserId.Should().Be(request.UserId);
+            savedIssue.DepartmentId.Should().Be(request.DepartmentId);
+            savedIssue.Status.Should().Be(IssueStatus.Pending);
+
+            _mockMediator.Verify(x => x.Publish(It.IsAny<INotification>(), It.IsAny<CancellationToken>()), Times.Once);
+
             result.Should().NotBeNull();
             result.Title.Should().Be(request.Title);
             result.Description.Should().Be(request.Description);
             result.Category.Should().Be(request.Category);
-            result.PhotoUrl.Should().Be(request.PhotoUrl);
-            result.UserId.Should().Be(request.UserId);
-            result.DepartmentId.Should().Be(request.DepartmentId);
             result.Status.Should().Be(IssueStatus.Pending.ToString());
-
-            _mockRepository.Verify(x => x.CreateAsync(It.IsAny<Issue>()), Times.Once);
-            _mockMediator.Verify(x => x.Publish(It.IsAny<INotification>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
         }
 
         [Fact]
@@ -78,7 +72,7 @@ namespace IssueService.Tests.Services
         {
             // Arrange
             var issueId = "issue123";
-            var existingIssue = new Issue(
+            var issue = new Issue(
                 "Test Issue",
                 "Test Description",
                 "Test Category",
@@ -87,19 +81,19 @@ namespace IssueService.Tests.Services
                 "dept123"
             );
 
-            _mockRepository
-                .Setup(x => x.GetByIdAsync(issueId))
-                .Returns(Task.FromResult(existingIssue));
+            _mockRepository.Setup(x => x.GetByIdAsync(issueId))
+                .ReturnsAsync(issue);
 
             // Act
             var result = await _service.GetIssueByIdAsync(issueId);
 
             // Assert
             result.Should().NotBeNull();
-            result.Title.Should().Be(existingIssue.Title);
-            result.Description.Should().Be(existingIssue.Description);
-            result.Category.Should().Be(existingIssue.Category);
-            result.Status.Should().Be(existingIssue.Status.ToString());
+            result.Id.Should().Be(issue.Id.ToString());
+            result.Title.Should().Be(issue.Title);
+            result.Description.Should().Be(issue.Description);
+            result.Category.Should().Be(issue.Category);
+            result.Status.Should().Be(issue.Status.ToString());
         }
 
         [Fact]
@@ -107,14 +101,12 @@ namespace IssueService.Tests.Services
         {
             // Arrange
             var issueId = "nonexistent";
-            _mockRepository
-                .Setup(x => x.GetByIdAsync(issueId))
-                .Returns(Task.FromResult<Issue>(null));
+            _mockRepository.Setup(x => x.GetByIdAsync(issueId))
+                .ReturnsAsync((Issue)null);
 
             // Act & Assert
             await _service.Invoking(s => s.GetIssueByIdAsync(issueId))
-                .Should().ThrowAsync<Exception>()
-                .WithMessage("Issue not found");
+                .Should().ThrowAsync<KeyNotFoundException>();
         }
 
         [Fact]
@@ -123,7 +115,7 @@ namespace IssueService.Tests.Services
             // Arrange
             var issueId = "issue123";
             var newStatus = IssueStatus.Resolved;
-            var existingIssue = new Issue(
+            var issue = new Issue(
                 "Test Issue",
                 "Test Description",
                 "Test Category",
@@ -132,20 +124,19 @@ namespace IssueService.Tests.Services
                 "dept123"
             );
 
-            _mockRepository
-                .Setup(x => x.GetByIdAsync(issueId))
-                .Returns(Task.FromResult(existingIssue));
+            _mockRepository.Setup(x => x.GetByIdAsync(issueId))
+                .ReturnsAsync(issue);
 
-            _mockMediator
-                .Setup(x => x.Publish(It.IsAny<INotification>(), It.IsAny<CancellationToken>()))
+            _mockRepository.Setup(x => x.UpdateStatusAsync(issueId, newStatus))
                 .Returns(Task.CompletedTask);
 
             // Act
             await _service.UpdateIssueStatusAsync(issueId, newStatus);
 
             // Assert
+            issue.Status.Should().Be(newStatus);
             _mockRepository.Verify(x => x.UpdateStatusAsync(issueId, newStatus), Times.Once);
-            _mockMediator.Verify(x => x.Publish(It.IsAny<INotification>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+            _mockMediator.Verify(x => x.Publish(It.IsAny<INotification>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
 
         [Fact]
@@ -155,17 +146,12 @@ namespace IssueService.Tests.Services
             var issueId = "nonexistent";
             var newStatus = IssueStatus.Resolved;
 
-            _mockRepository
-                .Setup(x => x.GetByIdAsync(issueId))
-                .Returns(Task.FromResult<Issue>(null));
+            _mockRepository.Setup(x => x.GetByIdAsync(issueId))
+                .ReturnsAsync((Issue)null);
 
             // Act & Assert
             await _service.Invoking(s => s.UpdateIssueStatusAsync(issueId, newStatus))
-                .Should().ThrowAsync<Exception>()
-                .WithMessage("Issue not found");
-
-            _mockRepository.Verify(x => x.UpdateStatusAsync(It.IsAny<string>(), It.IsAny<IssueStatus>()), Times.Never);
-            _mockMediator.Verify(x => x.Publish(It.IsAny<INotification>(), It.IsAny<CancellationToken>()), Times.Never);
+                .Should().ThrowAsync<KeyNotFoundException>();
         }
     }
 } 

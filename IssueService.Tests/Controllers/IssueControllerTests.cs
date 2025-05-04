@@ -35,21 +35,20 @@ namespace IssueService.Tests.Controllers
                 DepartmentId = "dept123"
             };
 
-            var expectedResponse = new IssueResponse
-            {
-                Id = "issue123",
-                Title = request.Title,
-                Description = request.Description,
-                Category = request.Category,
-                PhotoUrl = request.PhotoUrl,
-                UserId = request.UserId,
-                DepartmentId = request.DepartmentId,
-                Status = IssueStatus.Pending.ToString()
-            };
+            var issue = new Issue(
+                request.Title,
+                request.Description,
+                request.Category,
+                request.PhotoUrl,
+                request.UserId,
+                request.DepartmentId
+            );
+
+            var expectedResponse = new IssueResponse(issue);
 
             _mockIssueService
                 .Setup(x => x.ReportIssueAsync(request))
-                .Returns(Task.FromResult(expectedResponse));
+                .ReturnsAsync(expectedResponse);
 
             // Act
             var result = await _controller.Report(request);
@@ -64,18 +63,20 @@ namespace IssueService.Tests.Controllers
         {
             // Arrange
             var issueId = "issue123";
-            var expectedResponse = new IssueResponse
-            {
-                Id = issueId,
-                Title = "Test Issue",
-                Description = "Test Description",
-                Category = "Test Category",
-                Status = IssueStatus.Pending.ToString()
-            };
+            var issue = new Issue(
+                "Test Issue",
+                "Test Description",
+                "Test Category",
+                "http://test.com/photo.jpg",
+                "user123",
+                "dept123"
+            );
+
+            var expectedResponse = new IssueResponse(issue);
 
             _mockIssueService
                 .Setup(x => x.GetIssueByIdAsync(issueId))
-                .Returns(Task.FromResult(expectedResponse));
+                .ReturnsAsync(expectedResponse);
 
             // Act
             var result = await _controller.GetIssue(issueId);
@@ -92,7 +93,7 @@ namespace IssueService.Tests.Controllers
             var issueId = "nonexistent";
             _mockIssueService
                 .Setup(x => x.GetIssueByIdAsync(issueId))
-                .Returns(Task.FromResult<IssueResponse>(null));
+                .ReturnsAsync((IssueResponse)null);
 
             // Act
             var result = await _controller.GetIssue(issueId);
@@ -106,7 +107,7 @@ namespace IssueService.Tests.Controllers
         {
             // Arrange
             var issueId = "issue123";
-            var newStatus = IssueStatus.Resolved.ToString();
+            var newStatus = "Resolved";
 
             _mockIssueService
                 .Setup(x => x.UpdateIssueStatusAsync(issueId, IssueStatus.Resolved))

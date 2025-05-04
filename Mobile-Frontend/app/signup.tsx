@@ -10,199 +10,186 @@ import {
   Heading,
   FormControl,
   Pressable,
-  Icon, // To wrap the lucide icon
+  HStack,
+  Link,
+  LinkText,
+  Image,
+  ScrollView,
 } from '@gluestack-ui/themed';
 import { Stack, useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
-import { Alert, KeyboardAvoidingView, ScrollView, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native'; // Import Alert for feedback and other necessary imports
-import { useAuth } from '../context/AuthContext'; // Auth0 hook'unu ekleyelim
+
+// Import the same logo as in login
+const logo = require('../assets/images/au-logo.png');
 
 export default function SignUpScreen() {
   const router = useRouter();
-  const { login, isLoading: auth0Loading } = useAuth(); // Auth0 hook'undan login fonksiyonunu alalım
-
-  // State for form fields
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Loading state
-
-  // Get API Base URL (consistent with login.tsx)
-  const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.105:8082/api';
-
-  const handleSignup = async () => {
-    // Basic validation
-    if (!firstName || !lastName || !email || !password || !confirmPassword) {
-        Alert.alert('Signup Failed', 'Please fill in all fields.');
-        return;
-    }
-    if (password !== confirmPassword) {
-        Alert.alert('Signup Failed', 'Passwords do not match.');
-        return;
-    }
-
-    setIsLoading(true);
-    try {
-        console.log(`Attempting signup for ${email} to ${apiBaseUrl}/auth/signup`);
-        const response = await fetch(`${apiBaseUrl}/auth/signup`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                firstName, 
-                lastName, 
-                email, 
-                password 
-            }),
-        });
-
-        const responseData = await response.json();
-
-        if (response.ok) {
-            console.log("Signup successful:", responseData);
-            Alert.alert('Signup Successful', 'Your account has been created. Please log in.');
-            router.push('/login'); // Redirect to login screen
-        } else {
-            console.error("Signup failed:", response.status, responseData);
-            const errorMessage = responseData?.message || 'Could not create account. Please try again.';
-            Alert.alert('Signup Failed', errorMessage);
-        }
-    } catch (error) {
-        console.error("Signup error:", error);
-        Alert.alert('Signup Error', 'An unexpected error occurred. Please try again.');
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
-  // Auth0 ile kayıt ol/giriş yap
-  const handleAuth0Signup = async () => {
-    try {
-      // Auth0 login işlemi, kayıt ekranını da içerir
-      await login();
-      // Başarılı giriş sonrası router işlemi AuthContext tarafından yönetilir
-    } catch (error) {
-      console.error("Auth0 signup/login error:", error);
-      Alert.alert('Auth0 Error', 'Failed to connect to Auth0. Please try again.');
-    }
-  };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-      style={{ flex: 1 }} 
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView 
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Box flex={1} bg="$white" p="$5" justifyContent="center">
-            <Stack.Screen options={{ headerShown: false }} />
+    <Box flex={1} bg="$white">
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+        <Box flex={1} alignItems="center" justifyContent="center" p="$4">
+          <Image
+            source={logo}
+            alt="Akdeniz University Logo"
+            size="lg"
+            resizeMode="contain"
+          />
+          
+          <VStack space="md" alignItems="center" w="100%" maxWidth={400}>
+            {/* Logo and tagline */}
+            <Box alignItems="center" mb="$3">
+              <HStack alignItems="center">
+                <Text fontSize="$3xl" fontWeight="$bold" color="$gray900">Campus</Text>
+                <Text fontSize="$3xl" fontWeight="$bold" color="$blue800">Caution</Text>
+              </HStack>
+            </Box>
 
-            <VStack space="lg">
-              <Pressable onPress={() => router.back()} mb="$4" position="absolute" top={40} left={20} zIndex={1}>
-                <Icon as={ChevronLeft} size="xl" color="$black" />
-              </Pressable>
+            {/* Sign Up Card */}
+            <Box 
+              bg="$white" 
+              w="100%" 
+              p="$4" 
+              borderRadius="$2xl" 
+              style={{
+                elevation: 4,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+              }}
+            >
+              <Heading size="xl" textAlign="center" mb="$4">Sign Up</Heading>
 
-              <Heading size="xl" textAlign="center" mt={Platform.OS === 'ios' ? 60 : 40}>Create an Account</Heading>
+              {/* Full Name field */}
+              <FormControl w="100%" mb="$3">
+                <Text mb="$1" color="$gray700" fontWeight="$bold" fontSize="$sm">Full Name</Text>
+                <Input 
+                  style={{
+                    backgroundColor: '#F7F7f7',
+                    borderWidth: 0.7,
+                    height: 45
+                  }}
+                  borderRadius="$lg"
+                  mb="$1"
+                  size="sm"
+                >
+                  <InputField
+                    placeholder="Enter your full name"
+                    type="text"
+                    value={fullName}
+                    onChangeText={setFullName}
+                    autoCapitalize="words"
+                    fontWeight="medium"
+                    fontSize="$sm"
+                  />
+                </Input>
+              </FormControl>
 
-              <Text size="md" textAlign="center">
-                Welcome! Fill out the information below to create a new account and get started right away.
-              </Text>
+              {/* Email field */}
+              <FormControl w="100%" mb="$3">
+                <Text mb="$1" color="$gray700" fontWeight="$bold" fontSize="$sm">Email</Text>
+                <Input 
+                  style={{
+                    backgroundColor: '#F7F7f7',
+                    borderWidth: 0.7,
+                    height: 45
+                  }}
+                  borderRadius="$lg"
+                  mb="$1"
+                  size="sm"
+                >
+                  <InputField
+                    placeholder="Enter your email"
+                    type="text"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    fontWeight="medium"
+                    fontSize="$sm"
+                  />
+                </Input>
+              </FormControl>
 
-              {/* Auth0 Signup Button */}
-              <Button 
-                size="lg" 
-                variant="solid" 
-                action="primary" 
-                bg="$blue600" 
-                mt="$5"
-                onPress={handleAuth0Signup}
-                isDisabled={isLoading || auth0Loading}
+              {/* Password field */}
+              <FormControl w="100%" mb="$3">
+                <Text mb="$1" color="$gray700" fontWeight="$bold" fontSize="$sm">Password</Text>
+                <Input 
+                  style={{
+                    backgroundColor: '#F7F7f7',
+                    borderWidth: 0.7,
+                    height: 45
+                  }}
+                  borderRadius="$lg"
+                  mb="$1"
+                  size="sm"
+                >
+                  <InputField
+                    placeholder="Create a password"
+                    type="password"
+                    value={password}
+                    onChangeText={setPassword}
+                    fontWeight="medium"
+                    fontSize="$sm"
+                  />
+                </Input>
+              </FormControl>
+
+              {/* Confirm Password field */}
+              <FormControl w="100%" mb="$3">
+                <Text mb="$1" color="$gray700" fontWeight="$bold" fontSize="$sm">Confirm Password</Text>
+                <Input 
+                  style={{
+                    backgroundColor: '#F7F7f7',
+                    borderWidth: 0.7,
+                    height: 45
+                  }}
+                  borderRadius="$lg"
+                  mb="$1"
+                  size="sm"
+                >
+                  <InputField
+                    placeholder="Confirm your password"
+                    type="password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    fontWeight="medium"
+                    fontSize="$sm"
+                  />
+                </Input>
+              </FormControl>
+
+              {/* Sign Up button */}
+              <Button
+                size="md"
+                variant="solid"
+                bg="$blue800"
+                borderRadius="$lg"
+                mb="$3"
               >
-                <ButtonText>{auth0Loading ? 'Processing...' : 'Sign Up with Auth0'}</ButtonText>
+                <ButtonText fontSize="$sm">Sign Up</ButtonText>
               </Button>
 
-              <Box flexDirection="row" alignItems="center" w="100%" my="$4">
-                <Box flex={1} h="$px" bg="$trueGray300" />
-                <Text mx="$3" color="$trueGray500">OR</Text>
-                <Box flex={1} h="$px" bg="$trueGray300" />
-              </Box>
+              {/* Simple or text */}
+              <Text textAlign="center" color="$gray500" fontSize="$sm" my="$3">or</Text>
 
-              <VStack space="md" mt="$5">
-                <FormControl isDisabled={isLoading}>
-                  <Input variant="underlined">
-                    <InputField 
-                      placeholder="Name" 
-                      type="text" 
-                      value={firstName}
-                      onChangeText={setFirstName}
-                    />
-                  </Input>
-                </FormControl>
-                <FormControl isDisabled={isLoading}>
-                  <Input variant="underlined">
-                    <InputField 
-                      placeholder="Surname" 
-                      type="text" 
-                      value={lastName}
-                      onChangeText={setLastName}
-                    />
-                  </Input>
-                </FormControl>
-                <FormControl isDisabled={isLoading}>
-                  <Input variant="underlined">
-                    <InputField 
-                      placeholder="Email" 
-                      type="text" 
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address" 
-                      autoCapitalize="none"
-                    />
-                  </Input>
-                </FormControl>
-                <FormControl isDisabled={isLoading}>
-                  <Input variant="underlined">
-                    <InputField 
-                      placeholder="Password" 
-                      type="password" 
-                      value={password}
-                      onChangeText={setPassword}
-                    />
-                  </Input>
-                </FormControl>
-                <FormControl isDisabled={isLoading}>
-                  <Input variant="underlined">
-                    <InputField 
-                      placeholder="Confirm Password" 
-                      type="password" 
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                    />
-                  </Input>
-                </FormControl>
-              </VStack>
-
-              <Button 
-                size="lg" 
-                variant="solid" 
-                action="primary" 
-                bg="$blue800" 
-                mt="$10"
-                onPress={handleSignup}
-                isDisabled={isLoading}
-              >
-                <ButtonText>{isLoading ? 'Signing Up...' : 'Sign Up'}</ButtonText>
-              </Button>
-            </VStack>
-          </Box>
-        </ScrollView>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+              {/* Login link */}
+              <HStack justifyContent="center" space="sm">
+                <Text color="$gray700" fontSize="$sm">Already have an account?</Text>
+                <Pressable onPress={() => router.push('/login')}>
+                  <Text color="$blue800" fontWeight="$medium" fontSize="$sm">Login</Text>
+                </Pressable>
+              </HStack>
+            </Box>
+          </VStack>
+        </Box>
+      </ScrollView>
+    </Box>
   );
 } 

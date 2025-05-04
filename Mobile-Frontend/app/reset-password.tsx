@@ -20,24 +20,19 @@ export default function ResetPasswordScreen() {
 
   return (
     <Box flex={1} bg="$white" p="$5">
-      {/* Hide the default header */}
       <Stack.Screen options={{ headerShown: false }} />
 
       <VStack space="lg">
-        {/* Custom Header Back Button */}
         <Pressable onPress={() => router.back()} mb="$4">
           <Icon as={ChevronLeft} size="xl" color="$black" />
         </Pressable>
 
-        {/* Title */}
         <Heading size="xl">Reset Your Password</Heading>
 
-        {/* Description */}
         <Text size="md">
           You can reset your password after entering the confirmation code sent to your e-mail address linked to your account and your new password.
         </Text>
 
-        {/* Form Inputs */}
         <VStack space="md" mt="$5">
           <FormControl>
             <Input variant="underlined">
@@ -56,7 +51,6 @@ export default function ResetPasswordScreen() {
           </FormControl>
         </VStack>
 
-        {/* Reset Button */}
         <Button size="lg" variant="solid" action="primary" bg="$blue800" mt="$10">
           <ButtonText>Reset Password</ButtonText>
         </Button>

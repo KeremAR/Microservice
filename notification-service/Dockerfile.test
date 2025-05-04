@@ -1,0 +1,16 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Uygulama bağımlılıklarını kopyala ve yükle
+COPY package*.json ./
+RUN npm ci
+
+# Uygulama kaynak kodlarını kopyala
+COPY . .
+
+# TypeScript'i derle
+RUN npm run build
+
+# Test komutlarını çalıştır
+CMD ["npm", "run", "test"] 

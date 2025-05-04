@@ -1,16 +1,27 @@
+FROM node:18-alpine as builder
+
+WORKDIR /app
+
+# Uygulama bağımlılıklarını kopyala ve yükle
+COPY package*.json ./
+RUN npm ci
+
+# Uygulama kaynak kodlarını kopyala ve derle
+COPY . .
+RUN npm run build
+
+# Production image
 FROM node:18-alpine
 
 WORKDIR /app
 
+# Sadece gerekli dosyaları kopyala
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
 
-RUN npm install
-
-COPY . .
-
-RUN npm run build
-
+# Port ayarı
 EXPOSE 3000
 
-# Development modunda başlat
-CMD ["npm", "run", "start:dev"] 
+# Production modunda başlat
+CMD ["npm", "run", "start:prod"] 

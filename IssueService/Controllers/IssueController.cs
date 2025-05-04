@@ -1,6 +1,7 @@
 using IssueService.DTOs;
 using IssueService.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using IssueService.Domain.IssueAggregate;
 
 namespace IssueService.Controllers;
 
@@ -21,20 +22,26 @@ public class IssueController : ControllerBase
         var issue = await _service.ReportIssueAsync(request);
         return Ok(issue);
     }
+
     [HttpGet("{id}")]
-public async Task<IActionResult> GetIssue(string id)
-{
-    var issue = await _service.GetIssueByIdAsync(id);
-    if (issue == null)
-        return NotFound();
+    public async Task<IActionResult> GetIssue(string id)
+    {
+        var issue = await _service.GetIssueByIdAsync(id);
+        if (issue == null)
+            return NotFound();
 
-    return Ok(issue);
-}
-[HttpPut("{id}/status")]
-public async Task<IActionResult> UpdateStatus(string id, [FromBody] string status)
-{
-    await _service.UpdateIssueStatusAsync(id, status);
-    return NoContent();
-}
+        return Ok(issue);
+    }
 
+    [HttpPut("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(string id, [FromBody] string status)
+    {
+        if (!Enum.TryParse<IssueStatus>(status, out var issueStatus))
+        {
+            return BadRequest("Invalid status value");
+        }
+
+        await _service.UpdateIssueStatusAsync(id, issueStatus);
+        return NoContent();
+    }
 }

@@ -105,6 +105,69 @@ Example event payload:
 
 ---
 
+## 🧪 Unit Tests
+
+Comprehensive unit tests have been written for the Issue Service. These tests verify the core functionality and error handling of the service.
+
+### Test Coverage
+
+#### Controller Tests (IssueControllerTests)
+1. **Report_ValidRequest_ReturnsOkResult**
+   - Verifies successful processing of a valid issue creation request
+   - Validates OK (200) response
+
+2. **GetIssue_ExistingIssue_ReturnsOkResult**
+   - Verifies successful retrieval of an existing issue
+   - Validates OK (200) response and correct issue data
+
+3. **GetIssue_NonExistingIssue_ReturnsNotFound**
+   - Verifies NotFound (404) response for non-existing issue
+
+4. **UpdateStatus_ValidStatus_ReturnsNoContent**
+   - Verifies successful status update of an issue
+   - Validates NoContent (204) response
+
+5. **UpdateStatus_InvalidStatus_ReturnsBadRequest**
+   - Verifies BadRequest (400) response for invalid status value
+
+#### Service Tests (IssueServiceTests)
+1. **ReportIssueAsync_ValidRequest_CreatesAndReturnsIssue**
+   - Verifies successful issue creation
+   - Validates repository save operation
+   - Confirms domain event publication
+
+2. **GetIssueByIdAsync_ExistingIssue_ReturnsIssue**
+   - Verifies successful issue retrieval from repository
+   - Validates all fields are correctly populated
+
+3. **GetIssueByIdAsync_NonExistingIssue_ThrowsException**
+   - Verifies appropriate exception handling for non-existing issue
+
+4. **UpdateIssueStatusAsync_ValidStatus_UpdatesAndPublishesEvent**
+   - Verifies successful status update
+   - Validates repository update
+   - Confirms domain event publication
+
+5. **UpdateIssueStatusAsync_NonExistingIssue_ThrowsException**
+   - Verifies appropriate exception handling when updating non-existing issue
+
+### Test Results
+
+```
+Success! - Failed: 0, Passed: 10, Skipped: 0, Total: 10, Duration: 60 ms
+```
+
+All tests have passed successfully, indicating that the service is working as expected.
+
+### Areas Covered by Tests
+
+- ✅ Basic CRUD operations
+- ✅ Error handling
+- ✅ Domain rules
+- ✅ Event publishing
+- ✅ Input validation
+
+---
 
 ## 🐳 Docker Compose Setup
 
@@ -166,5 +229,4 @@ http://localhost:5240/swagger
 - Docker Compose configured for multi-container orchestration.
 - API easily testable through Swagger UI.
 - Department integration for cross-service communication.
-
----
+- Comprehensive test coverage with all tests passing.

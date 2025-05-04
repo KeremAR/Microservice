@@ -1,85 +1,108 @@
-# User Service
+# Campus Caution User Service
 
-This service is responsible for managing users, roles, and authentication in the Campus Issue Management System.
+This service handles user authentication and management for the Campus Caution application. It integrates with Auth0 for authentication and authorization.
 
-## Technologies Used
+## Features
 
-*   Java 17
-*   Spring Boot 3.x
-*   Spring Security (with JWT)
-*   Spring Data JPA
-*   PostgreSQL
-*   SpringDoc OpenAPI (Swagger UI)
-*   Lombok
-*   Maven
-*   Docker
-*   RabbitMQ (for potential event-driven communication)
+- User management (CRUD operations)
+- Role-based access control (student, staff, department_admin, superadmin)
+- Auth0 integration
+- Containerized with Docker
+- PostgreSQL database
 
-## Running the Service
+## Prerequisites
 
-### Using Docker (Recommended)
+- Java 24
+- Maven
+- Docker and Docker Compose
+- Auth0 account
 
-1.  Make sure you have Docker and Docker Compose installed.
-2.  Navigate to the `user-service` directory in your terminal.
-3.  Run the command: `docker-compose up --build`
-    *   This will build the service image (if not already built or if changes were made) and start the service along with PostgreSQL and RabbitMQ containers.
-4.  The service will be available at `http://localhost:8080`.
-5.  Swagger UI will be available at `http://localhost:8080/swagger-ui.html`.
+## Auth0 Setup
 
-To stop the services:
+1. Create a new Auth0 account or use an existing one
+2. Create a new API with these settings:
+   - Name: CampusCaution API V2
+   - Identifier (Audience): https://api.campus-caution-v2.com
+   - Signing Algorithm: RS256
+   - RBAC: Enabled
+   - Add Permissions in the Access Token: Enabled
 
-```bash
-docker-compose down
+3. Create the following permissions:
+   - read:profile
+   - report:issue
+   - read:own_issues
+   - read:department_issues
+   - update:issue_status
+   - claim:issue
+   - assign:issue
+   - read:department_staff
+   - read:department_reports
+   - read:all_issues
+   - delete:issue
+   - manage:roles
+   - manage:departments
+
+4. Create the following roles and assign appropriate permissions:
+   - student
+   - staff
+   - department_admin
+   - superadmin
+
+## Configuration
+
+Update the application.properties file with your Auth0 domain:
+
+```
+auth0.domain=YOUR_AUTH0_DOMAIN.auth0.com
 ```
 
-### Running Locally (Requires PostgreSQL and RabbitMQ running separately)
+## Running with Docker
 
-1.  Make sure you have Java 17 and Maven installed.
-2.  Ensure PostgreSQL is running (e.g., via Docker or local installation) and accessible.
-3.  Ensure RabbitMQ is running and accessible.
-4.  Update the `application.properties` file (`src/main/resources/application.properties`) with your database and RabbitMQ connection details if they differ from the defaults.
-5.  Navigate to the `user-service` directory in your terminal.
-6.  Run the command: `mvn spring-boot:run`
+1. Set the AUTH0_DOMAIN environment variable:
 
-## Domain-Driven Design Concepts
+```sh
+export AUTH0_DOMAIN=your-auth0-domain.auth0.com
+```
 
-This service utilizes some concepts from Domain-Driven Design (DDD).
+2. Run the application using Docker Compose:
 
-### Aggregates
+```sh
+docker-compose up -d
+```
 
-Aggregates are clusters of domain objects that can be treated as a single unit. They ensure data consistency within their boundaries.
+## Running Locally
 
-*   **User Aggregate:**
-    *   **Aggregate Root:** `User.java`
-    *   **Description:** Represents a user in the system. It includes user details (username, email, names, password) and their associated roles (`Set<Role>`). Operations like updating profile information or managing roles (though indirectly via repositories) are handled within the context of this aggregate.
-    *   **Consistency:** Ensures that a User object maintains valid state (e.g., required fields). Role assignments are managed to maintain relationships.
-*   **Role Aggregate:**
-    *   **Aggregate Root:** `Role.java`
-    *   **Description:** Represents a user role (e.g., STUDENT, STAFF, ADMIN). It's a simpler aggregate containing the role's ID and name (`ERole`).
+1. Start a PostgreSQL instance:
 
-### Domain Events
+```sh
+docker run -d -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=userservice postgres:16
+```
 
-Domain events represent significant occurrences within the domain that other parts of the system might be interested in. They help decouple components.
+2. Run the application:
 
-*   **`UserRegisteredEvent`**
-    *   **Description:** Published when a new user successfully registers.
-    *   **Data:** Contains `userId`, `username`, `email`, and `registeredAt` timestamp.
-    *   **Potential Listeners:** Could trigger welcome emails, create default profiles in other services, etc.
-*   **`UserProfileUpdatedEvent`**
-    *   **Description:** Published when a user's profile information (e.g., email) is updated.
-    *   **Data:** Contains `userId`, `oldEmail`, `newEmail`, and `updatedAt` timestamp.
-    *   **Potential Listeners:** Could trigger notifications, update data caches, synchronize information with other systems.
-
-Currently, these events are published using Spring's `ApplicationEventPublisher` and handled by `UserEventListener` for logging purposes within the same service.
+```sh
+./mvnw spring-boot:run
+```
 
 ## API Endpoints
 
-Refer to the Swagger UI (`http://localhost:8080/swagger-ui.html`) for a detailed and interactive API documentation.
+- `GET /api/public/health`: Health check endpoint
+- `GET /api/users/me`: Get current user profile
+- `POST /api/users`: Create a new user
+- `PUT /api/users/{id}`: Update a user
+- `GET /api/admin/users/{id}`: Get user by ID (admin only)
+- `DELETE /api/admin/users/{id}`: Delete a user (admin only)
 
-Key endpoints include:
+## Mobile App Integration
 
-*   `POST /api/auth/register`: Register a new user.
-*   `POST /api/auth/login`: Authenticate a user and get a JWT token.
-*   `GET /api/users/{id}`: Get user details by ID (Requires authentication).
-*   `PUT /api/users/{id}`: Update user details (Requires authentication).
-*   `GET /api/me`: Get the current authenticated user's details (Requires authentication). 
+Mobile app users (students) will authenticate via Auth0 SDK. The app should:
+1. Implement Auth0 SDK for authentication
+2. Use the JWT token for API requests
+3. Store the token securely on the device
+
+## Web Portal Integration
+
+Staff and admins will use the web portal which should:
+1. Implement Auth0 Universal Login
+2. Use the JWT token for API requests
+3. Enforce role-based access control on the frontend 

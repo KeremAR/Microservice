@@ -1,69 +1,41 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:14-alpine
-    container_name: user_service_postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: userdb
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - user-network
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: user_service_rabbitmq
-    ports:
-      - "5672:5672"   # AMQP protocol port
-      - "15672:15672" # Management UI port
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  user-service:
+  app:
+    container_name: user-service
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: user_service
     ports:
       - "8080:8080"
+    depends_on:
+      - postgres
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/userdb
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/userservice
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
-      - JWT_SECRET=${JWT_SECRET:-your-secret-key-here}
-      - JWT_EXPIRATION=${JWT_EXPIRATION:-86400000}
-      - SPRING_RABBITMQ_HOST=rabbitmq
-      - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - AUTH0_DOMAIN=dev-7uv8h746tp02jius.eu.auth0.com
+      - AUTH0_AUDIENCE=https://api.campus-caution-v2.com
     networks:
-      - user-network
+      - campus-caution-network
 
-networks:
-  user-network:
-    driver: bridge
+  postgres:
+    container_name: user-service-db
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=userservice
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - campus-caution-network
 
 volumes:
-  postgres_data: 
+  postgres-data:
+
+networks:
+  campus-caution-network:
+    driver: bridge 

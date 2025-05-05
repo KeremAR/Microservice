@@ -1,0 +1,155 @@
+# User Service
+
+## Overview
+
+The User Service is responsible for managing user authentication, authorization, and account management. It provides secure user registration, login, and token functionality using Firebase Authentication.
+
+## Features
+
+- User registration and authentication
+- Custom token generation
+- Account management
+- Event-driven integration with other services via RabbitMQ
+- PostgreSQL integration for user data storage
+
+## API Endpoints
+
+| Method | Endpoint                     | Description                          | Authentication |
+|--------|------------------------------|--------------------------------------|----------------|
+| POST   | `/auth/signup`               | Register a new user                  | None           |
+| POST   | `/auth/login`                | User login                           | None           |
+
+## Example Requests
+
+### User Registration
+
+```bash
+curl -X POST \
+  http://localhost:8000/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "user@example.com",
+    "password": "securepassword123"
+}'
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "code": 201,
+  "message": "User created successfully with id {user_id}"
+}
+```
+
+### User Login
+
+```bash
+curl -X POST \
+  http://localhost:8000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "user@example.com",
+    "password": "securepassword123"
+}'
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "code": 200,
+  "message": "User logged in successfully",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+## Tech Stack
+
+- FastAPI
+- Firebase Authentication
+- PostgreSQL
+- RabbitMQ for event messaging
+- Docker for containerization
+- Python 3.x
+
+## Environment Variables
+
+The service requires the following environment variables:
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/userdb
+```
+
+## Domain Events
+
+The service publishes the following domain events to the RabbitMQ message broker:
+
+### UserCreatedEvent
+Triggered when a new user is registered. Contains the following data:
+
+```json
+{
+  "event_id": "uuid-string",
+  "event_type": "user.created", 
+  "timestamp": "2023-05-24T12:34:56.789Z",
+  "version": "1.0",
+  "user_id": "user-uuid",
+  "email": "user@example.com",
+  "metadata": {
+    "source": "user_service",
+    "operation": "signup"
+  }
+}
+```
+
+### UserLoggedInEvent
+Triggered when a user successfully logs in. Contains the following data:
+
+```json
+{
+  "event_id": "uuid-string",
+  "event_type": "user.logged_in",
+  "timestamp": "2023-05-24T12:34:56.789Z",
+  "version": "1.0",
+  "user_id": "user-uuid",
+  "email": "user@example.com",
+  "login_timestamp": "2023-05-24T12:34:56.789Z",
+  "metadata": {
+    "source": "user_service",
+    "operation": "login"
+  }
+}
+```
+
+These events use routing key "user" and are published to the "liftease_exchange" exchange.
+
+## Running Locally
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the service
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+## Docker
+
+The service can be run using Docker Compose:
+
+```bash
+# Build and start all services
+docker-compose up --build
+```
+
+This will start:
+- User service (accessible at http://localhost:8000)
+- PostgreSQL database
+- RabbitMQ (management interface accessible at http://localhost:15672)
+
+## Security
+
+- Passwords are securely handled using Firebase Authentication
+- User data is stored in PostgreSQL database
+- RabbitMQ credentials are configured via environment variables 

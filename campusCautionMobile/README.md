@@ -10,7 +10,17 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Configure your local development environment
+
+   ```bash
+   # Copy the sample configuration file
+   cp constants/local.env.sample.ts constants/local.env.ts
+   
+   # Edit the file and update your IP address
+   # Replace 192.168.x.x with your machine's IP address
+   ```
+
+3. Start the app
 
    ```bash
     npx expo start
@@ -24,6 +34,19 @@ In the output, you'll find options to open the app in a
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+
+## Environment Configuration
+
+The app uses different environment configurations:
+
+- **Development**: Uses your local.env.ts configuration for API Gateway URL
+- **Test**: Uses test-api.campuscaution.com
+- **Production**: Uses api.campuscaution.com
+
+Configuration is handled in the following files:
+- `constants/env.ts`: Main environment configuration
+- `constants/local.env.ts`: Local developer settings (not committed to git)
+- `constants/config.ts`: API endpoint configuration
 
 ## Get a fresh project
 

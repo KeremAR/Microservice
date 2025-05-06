@@ -1,28 +1,33 @@
+import getEnvVars from './env';
+
+// Get environment configuration
+const currentEnv = getEnvVars();
+
 // Backend API bilgileri
-export const API_BASE_URL = 'http://192.168.1.105:8000'; // Ev IP adresi
+export const API_BASE_URL = currentEnv.API_GATEWAY_URL;
 
 // API endpoints
 export const API_ENDPOINTS = {
   AUTH: {
-    SIGNUP: '/auth/signup',
-    LOGIN: '/auth/login',
+    SIGNUP: '/user/auth/signup',
+    LOGIN: '/user/auth/login',
   },
   USERS: {
-    PROFILE: '/users/profile',
+    PROFILE: '/user/users/profile',
   },
   ISSUES: {
-    LIST: '/issues',
-    CREATE: '/issues',
-    DETAIL: (id: string) => `/issues/${id}`,
-    USER_ISSUES: '/issues/user',
-    UPDATE_STATUS: (id: string) => `/issues/${id}/status`,
+    LIST: '/issue/issues',
+    CREATE: '/issue/issues',
+    DETAIL: (id: string) => `/issue/issues/${id}`,
+    USER_ISSUES: '/issue/issues/user',
+    UPDATE_STATUS: (id: string) => `/issue/issues/${id}/status`,
   },
   DEPARTMENTS: {
-    LIST: '/departments',
+    LIST: '/department/departments',
   },
   NOTIFICATIONS: {
-    LIST: '/notifications',
-    MARK_READ: (id: string) => `/notifications/${id}/read`,
+    LIST: '/notification/notifications',
+    MARK_READ: (id: string) => `/notification/notifications/${id}/read`,
   }
 };
 

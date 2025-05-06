@@ -7,6 +7,8 @@ type User = {
   email: string;
   name?: string;
   surname?: string;
+  department_id?: number;
+  role?: string;
 };
 
 type SignUpParams = {
@@ -87,7 +89,20 @@ export default function useCustomAuth() {
         body: JSON.stringify({ email, password })
       });
       
-      const data = await response.json();
+      console.log('Login response status:', response.status);
+      
+      // Yanıtı önce metin olarak al ve logla
+      const responseText = await response.text();
+      console.log('Login response text:', responseText);
+      
+      // Metni JSON'a çevir
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('JSON parse hatası:', e);
+        throw new Error('Sunucu yanıtı geçersiz format');
+      }
       
       if (!response.ok) {
         setError({
@@ -104,10 +119,16 @@ export default function useCustomAuth() {
       setToken(authToken);
       
       // Kullanıcı bilgilerini kaydet
-      const userInfo = { 
+      const userInfo: User = { 
         id: data.user_id || '',
         email: email,
+        name: data.name || data.user_name || data.username || '',
+        surname: data.surname || data.user_surname || '',
+        department_id: data.department_id || null,
+        role: data.role || 'student'
       };
+      
+      console.log('User info to save:', userInfo);
       
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(userInfo));
       setUser(userInfo);
@@ -118,6 +139,7 @@ export default function useCustomAuth() {
       };
       
     } catch (err: any) {
+      console.error('Login error:', err);
       setError({
         code: 500,
         message: 'Bağlantı hatası: ' + err.message

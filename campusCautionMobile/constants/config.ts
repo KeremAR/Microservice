@@ -9,6 +9,20 @@ export const API_ENDPOINTS = {
   },
   USERS: {
     PROFILE: '/users/profile',
+  },
+  ISSUES: {
+    LIST: '/issues',
+    CREATE: '/issues',
+    DETAIL: (id: string) => `/issues/${id}`,
+    USER_ISSUES: '/issues/user',
+    UPDATE_STATUS: (id: string) => `/issues/${id}/status`,
+  },
+  DEPARTMENTS: {
+    LIST: '/departments',
+  },
+  NOTIFICATIONS: {
+    LIST: '/notifications',
+    MARK_READ: (id: string) => `/notifications/${id}/read`,
   }
 };
 

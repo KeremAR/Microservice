@@ -9,12 +9,24 @@ import {
   Animated,
   StatusBar,
   Platform,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
-import { mockIssues, mockNotifications, mockStats, campusMapRegion, currentUser, Coordinates } from '../../data/mockData';
+import { mockIssues, mockNotifications, mockStats, campusMapRegion } from '../../data/mockData';
 import OSMMap from '../../components/OSMMap';
+import { useAuth } from '../../contexts/AuthContext';
+import { getUserProfile } from '../../services/api';
+
+// Kullanıcı profili için tip tanımlaması
+interface UserProfile {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  department_id?: number | null;
+  role?: string | null;
+}
 
 // Mock Data for Announcements
 const mockAnnouncements = [
@@ -60,6 +72,12 @@ const bannerText = 'Together, we make our campus better.';
 export default function HomeScreen() {
   const router = useRouter();
   const screenWidth = Dimensions.get('window').width;
+  const { user, token } = useAuth();
+  
+  // States for user data and loading
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // Get status bar height
   const STATUSBAR_HEIGHT = StatusBar.currentHeight || (Platform.OS === 'ios' ? 44 : 0);
@@ -69,6 +87,38 @@ export default function HomeScreen() {
   const [slideAnim] = useState(new Animated.Value(-20));
   const [notificationsCount] = useState(mockNotifications.filter(n => !n.read).length);
   const [stats] = useState(mockStats);
+  
+  // Fetch user profile data
+  const fetchUserProfile = async () => {
+    if (!token) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const profileData = await getUserProfile(token);
+      console.log('Home - Profile data received:', profileData);
+      setUserProfile(profileData);
+      
+      // Eğer API'dan gelen verilerde name yoksa, auth context'teki name ile doldur
+      if (!profileData.name && user?.name) {
+        setUserProfile(prev => ({
+          ...prev,
+          name: user.name
+        }));
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch user profile:', err);
+      setError(err.message || 'Failed to load profile data');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Fetch profile when component mounts
+  useEffect(() => {
+    fetchUserProfile();
+  }, [token, user]);
   
   // Run animations when component mounts
   useEffect(() => {
@@ -122,6 +172,31 @@ export default function HomeScreen() {
   const receivedCount = mockIssues.filter(issue => issue.status === 'received').length;
   const inProgressCount = mockIssues.filter(issue => issue.status === 'in_progress').length;
   const completedCount = mockIssues.filter(issue => issue.status === 'completed').length;
+  
+  // Get user's name - from API if available, fallback to auth context
+  const getUserName = () => {
+    // Önce API'dan gelen profile verisine bak
+    if (userProfile && userProfile.name) {
+      return userProfile.name;
+    }
+    // Eğer API'dan gelen veride name yoksa, auth context'e bak
+    if (user && user.name) {
+      return user.name;
+    }
+    // Hiçbir veri yoksa "User" döndür
+    return 'User';
+  };
+  
+  // Get first letter of name for avatar
+  const getAvatarLetter = () => {
+    const name = getUserName();
+    return name.charAt(0).toUpperCase();
+  };
+
+  // Debug profile bilgilerini logla
+  console.log('Home - Auth context user:', user);
+  console.log('Home - User profile state:', userProfile);
+  console.log('Home - Calculated name:', getUserName());
   
   return (
     <View style={styles.container}>
@@ -179,7 +254,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => { router.push('/(app)/profile') }}>
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{currentUser.name.charAt(0)}</Text>
+                    <Text style={styles.avatarText}>{getAvatarLetter()}</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -187,9 +262,13 @@ export default function HomeScreen() {
             
             {/* Welcome Message - Only keep the welcome text */}
             <View style={styles.welcomeContainer}>
-              <Text style={styles.welcomeText}>
-                Welcome back, {currentUser.name.split(' ')[0]}!
-              </Text>
+              {loading ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text style={styles.welcomeText}>
+                  Welcome back, {getUserName().split(' ')[0]}!
+                </Text>
+              )}
             </View>
             
             {/* Quick Stats with vertical layout */}

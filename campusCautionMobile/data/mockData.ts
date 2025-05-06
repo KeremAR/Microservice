@@ -21,7 +21,7 @@ export interface User {
   name: string;
   email: string;
   avatar?: string; // URL to avatar image
-  department?: string;
+  department_id?: number; // department yerine department_id
   role: 'student' | 'staff' | 'admin';
 }
 
@@ -151,7 +151,7 @@ export const currentUser: User = {
   name: 'Kerem AR',
   email: 'test@test.com',
   role: 'student',
-  department: 'Mühendislik Fakültesi'
+  department_id: 1 // Mühendislik Fakültesi yerine numeric ID
 };
 
 // Mock notifications

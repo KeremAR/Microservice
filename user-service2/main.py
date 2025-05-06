@@ -47,6 +47,12 @@ def init_db():
             id VARCHAR(36) PRIMARY KEY,
             email VARCHAR(255) UNIQUE NOT NULL,
             firebase_uid VARCHAR(100) UNIQUE NOT NULL,
+            name VARCHAR(100),
+            surname VARCHAR(100),
+            role VARCHAR(50) DEFAULT 'user',
+            phone_number VARCHAR(20),
+            is_active BOOLEAN DEFAULT TRUE,
+            department_id VARCHAR(36),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')

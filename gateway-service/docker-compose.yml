@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build: .
+    ports:
+      - "3000:3000"
+    networks:
+      - microservice-network
+    restart: always
+
+networks:
+  microservice-network:
+    driver: bridge 

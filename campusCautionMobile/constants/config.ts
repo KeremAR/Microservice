@@ -1,5 +1,5 @@
 // Backend API bilgileri
-export const API_BASE_URL = 'http://10.47.3.76:8000'; // Akdeniz Üniversitesi IP adresi
+export const API_BASE_URL = 'http://192.168.1.105:8000'; // Ev IP adresi
 
 // API endpoints
 export const API_ENDPOINTS = {

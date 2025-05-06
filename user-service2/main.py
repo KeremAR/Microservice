@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncio
 from aio_pika import connect, Message, ExchangeType, DeliveryMode
+from fastapi import Depends, Header
+import jwt
 
 load_dotenv()
 
@@ -217,6 +219,9 @@ async def shutdown_event():
 async def signup(user_data: SignUpSchema):
     email = user_data.email
     password = user_data.password
+    name = getattr(user_data, 'name', '') or ''
+    surname = getattr(user_data, 'surname', '') or ''
+    phone_number = getattr(user_data, 'phone_number', '') or ''
     
     try:
         # Check if user already exists in PostgreSQL
@@ -239,10 +244,13 @@ async def signup(user_data: SignUpSchema):
         user_id = str(uuid.uuid4())
         firebase_user = auth.create_user(uid=user_id, email=email, password=password)
         
-        # Save user in PostgreSQL
+        # Save user in PostgreSQL with extended fields
         cursor.execute(
-            "INSERT INTO users (id, email, firebase_uid) VALUES (%s, %s, %s)",
-            (user_id, email, firebase_user.uid)
+            """
+            INSERT INTO users (id, email, firebase_uid, name, surname, role, phone_number, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (user_id, email, firebase_user.uid, name, surname, 'user', phone_number, True)
         )
         conn.commit()
         
@@ -257,7 +265,11 @@ async def signup(user_data: SignUpSchema):
         return JSONResponse(content={
             "status": "success",
             "code": 201,
-            "message": f"User created successfully with id {user_id}"
+            "message": f"User created successfully with id {user_id}",
+            "user_id": user_id,
+            "email": email,
+            "name": name,
+            "surname": surname
         }, status_code=201)
     
     except auth.EmailAlreadyExistsError:
@@ -267,6 +279,7 @@ async def signup(user_data: SignUpSchema):
             "message": "Email already exists in Firebase"
         })
     except Exception as e:
+        print(f"Signup error: {str(e)}")
         raise HTTPException(status_code=500, detail={
             "status": "error",
             "code": 500,
@@ -283,14 +296,43 @@ async def login(user_data: LoginSchema):
     
     try:
         # Get user by email from Firebase
-        user = auth.get_user_by_email(email)
+        firebase_user = auth.get_user_by_email(email)
         
         # Create custom token
-        custom_token = auth.create_custom_token(user.uid)
+        custom_token = auth.create_custom_token(firebase_user.uid)
+        
+        # Veritabanından kullanıcı bilgilerini al
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT id, email, name, surname, role, is_active, department_id
+            FROM users
+            WHERE firebase_uid = %s
+        """, (firebase_user.uid,))
+        user_db = cursor.fetchone()
+        
+        if not user_db:
+            # Kullanıcı Firebase'de var ama veritabanında yoksa, ekleyelim
+            user_id = str(uuid.uuid4())
+            cursor.execute("""
+                INSERT INTO users (id, email, firebase_uid, name, surname, role, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, email, name, surname, role, is_active
+            """, (user_id, email, firebase_user.uid, '', '', 'user', True))
+            conn.commit()
+            user_db = cursor.fetchone()
+        
+        # Role değerini doğru alma
+        user_role = 'user'  # Varsayılan değer
+        if user_db and user_db.get('role') is not None and user_db.get('role') != '':
+            user_role = user_db.get('role')
+            
+        print(f"LOGIN - User role from DB: '{user_role}', Raw value: '{user_db.get('role')}'")
         
         # Send domain event to RabbitMQ
         event = UserLoggedInEvent.create(
-            user_id=user.uid,
+            user_id=firebase_user.uid,
             email=email,
             metadata={"source": "user_service", "operation": "login"}
         )
@@ -300,9 +342,17 @@ async def login(user_data: LoginSchema):
             "status": "success",
             "code": 200,
             "message": "User logged in successfully",
-            "token": custom_token.decode()
+            "token": custom_token.decode(),
+            "user_id": user_db['id'],
+            "name": user_db['name'] or email.split('@')[0],
+            "surname": user_db['surname'] or "",
+            "email": email,
+            "role": user_role,  # Düzeltilmiş role
+            "department_id": user_db.get('department_id'),  # Sadece department_id dönüyoruz
+            "is_active": user_db['is_active']
         })
     except Exception as e:
+        print(f"Login error: {str(e)}")
         raise HTTPException(status_code=401, detail={
             "status": "error",
             "code": 401,
@@ -311,6 +361,122 @@ async def login(user_data: LoginSchema):
                 "error_description": str(e)
             }
         })
+    finally:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn:
+            conn.close()
+
+# Yeni eklenen profil endpoint'i
+@app.get("/users/profile")
+async def get_profile(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail={
+            "status": "error",
+            "code": 401,
+            "message": "Unauthorized request. Bearer token is required."
+        })
+    
+    token = authorization.replace("Bearer ", "")
+    user_id = None
+    
+    try:
+        # Önce token'ı decode etmeyi deneyelim - custom token olabilir
+        try:
+            # Custom token'dan user_id bilgisini çıkarmak için
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            print(f"Token decoded: {decoded}")
+            
+            # Custom token içinde uid alanı bulunur
+            if 'uid' in decoded:
+                user_id = decoded['uid']
+                print(f"User ID from custom token: {user_id}")
+            else:
+                # Başka bir yöntem de deneyebiliriz
+                # Bazen sub veya user_id alanlarında olabilir
+                for field in ['sub', 'user_id', 'id']:
+                    if field in decoded:
+                        user_id = decoded[field]
+                        print(f"User ID found in {field} field: {user_id}")
+                        break
+                
+        except Exception as e:
+            print(f"Token decode error: {e}")
+        
+        # Eğer hala user_id bulunamadıysa, Firebase'e başvuralım
+        if not user_id:
+            try:
+                # Firebase token'ı doğrula
+                decoded_token = auth.verify_id_token(token)
+                user_id = decoded_token.get("uid")
+                print(f"User ID from Firebase verify_id_token: {user_id}")
+            except Exception as e:
+                print(f"Firebase token verification error: {e}")
+        
+        # Hala user_id bulunamadıysa, hata döndürelim
+        if not user_id:
+            raise HTTPException(status_code=401, detail={
+                "status": "error",
+                "code": 401,
+                "message": "Invalid token. Could not extract user ID."
+            })
+        
+        # Veritabanındaki kullanıcı bilgilerini al
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Kullanıcının veritabanındaki bilgilerini al, firebase_uid ile eşleşen kullanıcıyı bul
+        cursor.execute("""
+            SELECT id, email, name, surname, role, phone_number, is_active, department_id 
+            FROM users 
+            WHERE firebase_uid = %s OR id = %s
+        """, (user_id, user_id))
+        user_data = cursor.fetchone()
+        
+        if not user_data:
+            print(f"No user found with firebase_uid or id = {user_id}")
+            raise HTTPException(status_code=404, detail={
+                "status": "error",
+                "code": 404,
+                "message": "User not found"
+            })
+        
+        # Role değerini doğru alma
+        user_role = 'user'  # Varsayılan değer
+        if user_data and user_data.get('role') is not None and user_data.get('role') != '':
+            user_role = user_data.get('role')
+            
+        print(f"PROFILE - User role from DB: '{user_role}', Raw value: '{user_data.get('role')}'")
+        
+        # Profil bilgilerini döndür
+        return JSONResponse(content={
+            "status": "success",
+            "code": 200,
+            "user_id": user_data['id'],
+            "name": user_data['name'] or user_data['email'].split('@')[0],
+            "surname": user_data['surname'] or "",
+            "email": user_data['email'],
+            "role": user_role,  # Düzeltilmiş role
+            "phone_number": user_data['phone_number'] or "",
+            "is_active": user_data['is_active'],
+            "department_id": user_data.get('department_id')  # Sadece department_id dönüyoruz
+        })
+        
+    except Exception as e:
+        print(f"Profile error: {str(e)}")
+        raise HTTPException(status_code=401, detail={
+            "status": "error",
+            "code": 401,
+            "message": "Failed to verify token or get user profile",
+            "details": {
+                "error_description": str(e)
+            }
+        })
+    finally:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 if __name__ == "__main__":
     import uvicorn

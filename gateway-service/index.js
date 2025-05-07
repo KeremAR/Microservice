@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
 const morgan = require('morgan');
+const http = require('http');
 
 // Load environment variables based on NODE_ENV
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -76,6 +77,69 @@ const options = {
     console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
   }
 };
+
+// Helper function to make an HTTP request and return a promise
+function makeRequest(options, data = null) {
+  return new Promise((resolve, reject) => {
+    console.log(`Making request to: ${options.hostname}:${options.port}${options.path}`);
+    
+    const req = http.request(options, (res) => {
+      let responseData = '';
+      
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+      
+      res.on('end', () => {
+        console.log(`Received response from ${options.hostname}:${options.port}${options.path} with status: ${res.statusCode}`);
+        
+        if (res.statusCode >= 400) {
+          return reject({
+            statusCode: res.statusCode,
+            message: `Service returned error: ${res.statusCode}`,
+            data: responseData
+          });
+        }
+        
+        try {
+          // Try to parse as JSON
+          const parsedData = JSON.parse(responseData);
+          resolve(parsedData);
+        } catch (error) {
+          // If not valid JSON, return as string
+          resolve(responseData);
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      console.error(`Error in request to ${options.hostname}:${options.port}${options.path}: ${error.message}`);
+      reject({
+        statusCode: 500,
+        message: `Request failed: ${error.message}`,
+        error
+      });
+    });
+    
+    req.on('timeout', () => {
+      console.error(`Request to ${options.hostname}:${options.port}${options.path} timed out`);
+      req.destroy();
+      reject({
+        statusCode: 504,
+        message: 'Request timed out'
+      });
+    });
+    
+    // Set a timeout of 10 seconds
+    req.setTimeout(10000);
+    
+    if (data) {
+      req.write(JSON.stringify(data));
+    }
+    
+    req.end();
+  });
+}
 
 // Proxy routes with URLs from environment variables
 app.use('/user', createProxyMiddleware({

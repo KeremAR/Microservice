@@ -46,4 +46,11 @@ public class IssueRepository : IIssueRepository
             .Find(i => i.UserId == userId)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<Issue>> GetAllAsync()
+    {
+        return await _context.Issues
+            .Find(_ => true)
+            .ToListAsync();
+    }
 }

@@ -81,6 +81,12 @@ public class IssueServiceImpl : IIssueService
         return issues.Select(issue => new IssueResponse(issue));
     }
 
+    public async Task<IEnumerable<IssueResponse>> GetAllIssuesAsync()
+    {
+        var issues = await _repository.GetAllAsync();
+        return issues.Select(issue => new IssueResponse(issue));
+    }
+
     private async Task DispatchEventsAsync(Issue issue)
     {
         foreach (var @event in issue.Events)

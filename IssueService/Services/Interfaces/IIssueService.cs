@@ -10,4 +10,5 @@ public interface IIssueService
     Task<IssueResponse> GetIssueByIdAsync(string id);
     Task UpdateIssueStatusAsync(string id, IssueStatus status);
     Task<IEnumerable<IssueResponse>> GetIssuesByUserIdAsync(string userId);
+    Task<IEnumerable<IssueResponse>> GetAllIssuesAsync();
 }

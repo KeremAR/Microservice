@@ -10,4 +10,5 @@ public interface IIssueRepository
     Task CreateAsync(Issue issue);
     Task UpdateStatusAsync(string id, IssueStatus status);
     Task<IEnumerable<Issue>> GetByUserIdAsync(string userId);
+    Task<IEnumerable<Issue>> GetAllAsync();
 }

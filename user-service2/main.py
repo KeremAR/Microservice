@@ -228,6 +228,8 @@ async def signup(user_data: SignUpSchema):
     name = getattr(user_data, 'name', '') or ''
     surname = getattr(user_data, 'surname', '') or ''
     phone_number = getattr(user_data, 'phone_number', '') or ''
+    role = getattr(user_data, 'role', 'user') or 'user'
+    department_id = getattr(user_data, 'department_id', None)
     
     try:
         # Check if user already exists in PostgreSQL
@@ -253,10 +255,10 @@ async def signup(user_data: SignUpSchema):
         # Save user in PostgreSQL with extended fields
         cursor.execute(
             """
-            INSERT INTO users (id, email, firebase_uid, name, surname, role, phone_number, is_active)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO users (id, email, firebase_uid, name, surname, role, phone_number, is_active, department_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
-            (user_id, email, firebase_user.uid, name, surname, 'user', phone_number, True)
+            (user_id, email, firebase_user.uid, name, surname, role, phone_number, True, department_id)
         )
         conn.commit()
         

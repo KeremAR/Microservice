@@ -135,17 +135,17 @@ export default function IssueDetailScreen() {
     if (!dateStr) return 'Unknown date';
     
     try {
-      const date = new Date(dateStr);
+    const date = new Date(dateStr);
       // Check if date is valid
       if (isNaN(date.getTime())) {
         return dateStr;
       }
       
-      return date.toLocaleDateString('en-US', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      });
+    return date.toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
     } catch (error) {
       console.error('Error formatting date:', error);
       return dateStr;

@@ -17,7 +17,7 @@ import { Link, useRouter } from 'expo-router';
 import { mockIssues, mockNotifications, mockStats, campusMapRegion } from '../../data/mockData';
 import OSMMap from '../../components/OSMMap';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserProfile } from '../../services/api';
+import { getUserProfile, getIssues, getUserIssues } from '../../services/api';
 
 // Kullanıcı profili için tip tanımlaması
 interface UserProfile {
@@ -26,6 +26,20 @@ interface UserProfile {
   email?: string | null;
   department_id?: number | null;
   role?: string | null;
+}
+
+// Issue interface
+interface Issue {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  latitude?: number;
+  longitude?: number;
+  departmentId?: number;
+  userId?: string;
+  createdAt?: string;
+  isUserIssue?: boolean; // To identify if issue belongs to current user
 }
 
 // Mock Data for Announcements
@@ -78,6 +92,9 @@ export default function HomeScreen() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allIssues, setAllIssues] = useState<Issue[]>([]);
+  const [userIssues, setUserIssues] = useState<Issue[]>([]);
+  const [isLoadingIssues, setIsLoadingIssues] = useState(false);
   
   // Get status bar height
   const STATUSBAR_HEIGHT = StatusBar.currentHeight || (Platform.OS === 'ios' ? 44 : 0);
@@ -115,9 +132,44 @@ export default function HomeScreen() {
     }
   };
   
-  // Fetch profile when component mounts
+  // Fetch all issues
+  const fetchAllIssues = async () => {
+    if (!token) return;
+    
+    setIsLoadingIssues(true);
+    
+    try {
+      // Fetch all issues
+      const issues = await getIssues(token);
+      console.log('All issues fetched:', issues.length);
+      
+      // Fetch user issues
+      const userIssuesData = await getUserIssues(token);
+      console.log('User issues fetched:', userIssuesData.length);
+      
+      // Mark which issues belong to the current user
+      const userIssueIds = new Set(userIssuesData.map((issue: Issue) => issue.id));
+      
+      // Process all issues and mark user's issues
+      const processedIssues = Array.isArray(issues) ? issues.map((issue: Issue) => ({
+        ...issue,
+        isUserIssue: userIssueIds.has(issue.id)
+      })) : [];
+      
+      setAllIssues(processedIssues);
+      setUserIssues(userIssuesData);
+      
+    } catch (err: any) {
+      console.error('Failed to fetch issues:', err);
+    } finally {
+      setIsLoadingIssues(false);
+    }
+  };
+  
+  // Fetch profile and issues when component mounts
   useEffect(() => {
     fetchUserProfile();
+    fetchAllIssues();
   }, [token, user]);
   
   // Run animations when component mounts
@@ -136,42 +188,29 @@ export default function HomeScreen() {
     ]).start();
   }, []);
   
-  // Filter issues for user's vs others
-  const userIssues = mockIssues.filter(issue => issue.isUserIssue === true);
-  const otherIssues = mockIssues.filter(issue => issue.isUserIssue === false);
-  
   const navigateToIssueDetail = (issueId: string) => {
     router.push(`/issue-detail?id=${issueId}`);
   };
   
-  // Process markers for OSMMap
-  const mapMarkers = [
-    ...userIssues
-      .filter(issue => issue.status !== 'completed') // Filter out completed issues
-      .map(issue => ({
-        id: issue.id,
-        coordinates: issue.coordinates,
-        title: issue.title,
-        description: issue.location,
-        color: 'red', // User's issues in red
-        isUserIssue: true
-      })),
-    ...otherIssues
-      .filter(issue => issue.status !== 'completed') // Filter out completed issues
-      .map(issue => ({
-        id: issue.id,
-        coordinates: issue.coordinates,
-        title: issue.title,
-        description: issue.location,
-        color: 'blue', // Other issues in blue
-        isUserIssue: false
-      }))
-  ];
+  // Process markers for OSMMap from real issues data
+  const mapMarkers = allIssues
+    .filter(issue => issue.status !== 'Completed' && issue.latitude && issue.longitude) 
+    .map(issue => ({
+      id: issue.id,
+      coordinates: {
+        latitude: issue.latitude || 0,
+        longitude: issue.longitude || 0,
+      },
+      title: issue.title,
+      description: issue.description,
+      color: issue.isUserIssue ? 'red' : 'blue', // User's issues in red
+      isUserIssue: issue.isUserIssue
+    }));
   
   // Calculate counts by status
-  const receivedCount = mockIssues.filter(issue => issue.status === 'received').length;
-  const inProgressCount = mockIssues.filter(issue => issue.status === 'in_progress').length;
-  const completedCount = mockIssues.filter(issue => issue.status === 'completed').length;
+  const receivedCount = allIssues.filter(issue => issue.status === 'Received' || issue.status === 'New').length;
+  const inProgressCount = allIssues.filter(issue => issue.status === 'InProgress' || issue.status === 'Processing').length;
+  const completedCount = allIssues.filter(issue => issue.status === 'Completed' || issue.status === 'Done').length;
   
   // Get user's name - from API if available, fallback to auth context
   const getUserName = () => {
@@ -197,6 +236,7 @@ export default function HomeScreen() {
   console.log('Home - Auth context user:', user);
   console.log('Home - User profile state:', userProfile);
   console.log('Home - Calculated name:', getUserName());
+  console.log('Home - Map markers:', mapMarkers.length);
   
   return (
     <View style={styles.container}>
@@ -204,20 +244,22 @@ export default function HomeScreen() {
       
       {/* Full screen map - Using OpenStreetMap */}
       <View style={styles.mapContainer}>
-        <OSMMap
-          style={styles.map}
-          initialRegion={campusMapRegion}
-          markers={mapMarkers}
-          onMarkerPress={(marker) => {
-            // Only navigate to detail page for user's own issues
-            if (marker.isUserIssue) {
+        {isLoadingIssues ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text style={styles.loadingText}>Loading issues...</Text>
+          </View>
+        ) : (
+          <OSMMap
+            style={styles.map}
+            initialRegion={campusMapRegion}
+            markers={mapMarkers}
+            onMarkerPress={(marker) => {
+              // Navigate to detail page for all issues
               navigateToIssueDetail(marker.id);
-            } else {
-              // For other issues, just show the popup
-              console.log('Other marker pressed:', marker.title);
-            }
-          }}
-        />
+            }}
+          />
+        )}
       </View>
       
       {/* Header floating on top of map */}
@@ -282,7 +324,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <Text style={styles.statValue}>
-                    0
+                    {receivedCount}
                   </Text>
                 </TouchableOpacity>
                 
@@ -294,7 +336,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <Text style={styles.statValue}>
-                    1
+                    {inProgressCount}
                   </Text>
                 </TouchableOpacity>
                 
@@ -306,7 +348,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <Text style={styles.statValue}>
-                    1
+                    {completedCount}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -314,6 +356,16 @@ export default function HomeScreen() {
           </View>
         </View>
       </View>
+
+      {/* Floating Report Button */}
+      <TouchableOpacity 
+        style={styles.floatingButton}
+        onPress={() => router.push('/(app)/create-report')}
+      >
+        <View style={styles.fabGradient}>
+          <Ionicons name="add" size={32} color="white" />
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -432,15 +484,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  reportButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 30,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#3B82F6',
   },
   floatingButton: {
     position: 'absolute',
@@ -449,6 +502,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
+    backgroundColor: '#3B82F6',
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -457,6 +511,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'white',
     overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fabGradient: {
     width: '100%',

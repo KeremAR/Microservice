@@ -7,12 +7,19 @@ import {
   StatusBar,
   Dimensions,
   Animated,
-  Pressable
+  Pressable,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { mockIssues } from '../../data/mockData';
 import OSMMap from '../../components/OSMMap';
+import { getIssueDetails } from '../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../contexts/AuthContext';
+
+// Token key
+const TOKEN_KEY = 'auth_token';
 
 // Define type for issue
 interface Coordinates {
@@ -24,17 +31,28 @@ interface IssueDetail {
   id: string;
   title: string;
   description: string;
-  status: 'received' | 'in_progress' | 'completed' | 'rejected';
-  department: string;
-  location: string;
-  date: string;
-  coordinates: Coordinates;
+  status: string;
+  departmentId?: number;
+  departmentName?: string;
+  location?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  date?: string;
+  latitude?: number;
+  longitude?: number;
+  userId?: string;
+  photoUrl?: string;
+  coordinates?: Coordinates;
+  [key: string]: any;
 }
 
 export default function IssueDetailScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
+  const { token } = useAuth();
   const [issue, setIssue] = useState<IssueDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const issueId = params.id as string;
   const windowHeight = Dimensions.get('window').height;
   const mapHeight = windowHeight * 0.5;
@@ -48,10 +66,53 @@ export default function IssueDetailScreen() {
   // Header icon/text rengi için state
   const [headerIsLight, setHeaderIsLight] = useState(true);
   
-  // Find the issue with the matching ID
+  // Fetch issue details from API
   useEffect(() => {
-    const foundIssue = mockIssues.find(item => item.id === issueId);
-    setIssue(foundIssue || mockIssues[0]); // Default to first issue if not found
+    const fetchIssueDetails = async () => {
+      if (!issueId) {
+        setError('Issue ID is missing');
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Get token from context or AsyncStorage
+        let authToken = token;
+        
+        if (!authToken) {
+          console.log('Token not found in context, trying AsyncStorage');
+          authToken = await AsyncStorage.getItem(TOKEN_KEY);
+        }
+        
+        if (!authToken) {
+          setError('Authentication token not found');
+          setLoading(false);
+          return;
+        }
+        
+        console.log('Fetching issue details for ID:', issueId);
+        const issueData = await getIssueDetails(authToken, issueId);
+        
+        if (!issueData) {
+          setError('Issue not found or error fetching details');
+          setLoading(false);
+          return;
+        }
+        
+        console.log('Issue details fetched successfully:', issueData);
+        setIssue(issueData);
+      } catch (err) {
+        console.error('Error fetching issue details:', err);
+        setError('Failed to load issue details. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchIssueDetails();
   }, [issueId]);
   
   // Scroll pozisyonunu izleyip header rengini değiştirme
@@ -70,19 +131,223 @@ export default function IssueDetailScreen() {
   }, [scrollY, headerIsLight]);
   
   // Format the date
-  const formatDate = (dateStr: string): string => {
+  const formatDate = (dateStr?: string): string => {
+    if (!dateStr) return 'Unknown date';
+    
+    try {
     const date = new Date(dateStr);
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return dateStr;
+      }
+      
     return date.toLocaleDateString('en-US', {
       day: 'numeric',
       month: 'short',
       year: 'numeric'
     });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return dateStr;
+    }
+  };
+
+  // Get status color
+  const getStatusColor = (status: string) => {
+    const statusLower = status?.toLowerCase() || '';
+    
+    switch (statusLower) {
+      case 'completed':
+      case 'done':
+      case 'resolved':
+      case 'fixed':
+        return '#10B981';
+      case 'in_progress':
+      case 'inprogress':
+      case 'in progress':
+      case 'processing':
+      case 'working':
+        return '#F59E0B';
+      case 'received':
+      case 'open':
+      case 'new':
+      case 'pending':
+      case 'submitted':
+        return '#444444';
+      case 'rejected':
+      case 'closed':
+      case 'denied':
+      case 'cancelled':
+        return '#DC2626';
+      default:
+        return '#4b5563';
+    }
   };
   
-  if (!issue) {
+  // Get status label
+  const getStatusLabel = (status: string) => {
+    const statusLower = status?.toLowerCase() || '';
+    
+    switch (statusLower) {
+      case 'completed':
+      case 'done':
+      case 'resolved':
+      case 'fixed':
+        return 'Completed';
+      case 'in_progress':
+      case 'inprogress':
+      case 'in progress':
+      case 'processing':
+      case 'working':
+        return 'In Progress';
+      case 'received':
+      case 'open':
+      case 'new':
+      case 'pending':
+      case 'submitted':
+        return 'Received';
+      case 'rejected':
+      case 'closed':
+      case 'denied':
+      case 'cancelled':
+        return 'Rejected';
+      default:
+        return status || 'Unknown';
+    }
+  };
+  
+  // Calculate status timeline
+  const getStatusTimeline = (issue: IssueDetail) => {
+    const statuses = [];
+    const createdDate = issue.createdAt || issue.date || new Date().toISOString();
+    
+    // Always add received status
+    statuses.push({
+      status: 'received',
+      label: 'Received',
+      date: createdDate,
+      message: 'Your issue has been received and is being reviewed.'
+    });
+    
+    // Add in_progress status if applicable
+    if (['in_progress', 'completed', 'done', 'resolved', 'fixed'].includes(issue.status?.toLowerCase())) {
+      // Estimate in_progress date as 3 days after creation
+      const inProgressDate = new Date(new Date(createdDate).getTime() + 3*24*60*60*1000);
+      statuses.push({
+        status: 'in_progress',
+        label: 'In Progress',
+        date: issue.updatedAt || inProgressDate.toISOString(),
+        message: "The issue is currently being addressed by the maintenance team."
+      });
+    }
+    
+    // Add completed status if applicable
+    if (['completed', 'done', 'resolved', 'fixed'].includes(issue.status?.toLowerCase())) {
+      // Estimate completion date as 7 days after creation
+      const completedDate = new Date(new Date(createdDate).getTime() + 7*24*60*60*1000);
+      statuses.push({
+        status: 'completed',
+        label: 'Completed',
+        date: issue.resolvedAt || completedDate.toISOString(),
+        message: "The issue has been successfully resolved."
+      });
+    }
+    
+    // Add rejected status if applicable
+    if (['rejected', 'closed', 'denied', 'cancelled'].includes(issue.status?.toLowerCase())) {
+      // Estimate rejection date as 2 days after creation
+      const rejectedDate = new Date(new Date(createdDate).getTime() + 2*24*60*60*1000);
+      statuses.push({
+        status: 'rejected',
+        label: 'Rejected',
+        date: issue.resolvedAt || rejectedDate.toISOString(),
+        message: "This issue could not be resolved or was declined."
+      });
+    }
+    
+    return statuses;
+  };
+  
+  // Get department name
+  const getDepartmentName = (issue: IssueDetail) => {
+    return issue.departmentName || `Department #${issue.departmentId || 'Unknown'}`;
+  };
+  
+  // Get location string
+  const getLocationString = (issue: IssueDetail) => {
+    if (issue.location) return issue.location;
+    
+    if (issue.latitude && issue.longitude) {
+      return `Latitude: ${issue.latitude.toFixed(6)}, Longitude: ${issue.longitude.toFixed(6)}`;
+    }
+    
+    return 'Location data not available';
+  };
+  
+  // Get coordinates from issue
+  const getCoordinates = (issue: IssueDetail) => {
+    // First, try to use latitude/longitude fields from issue
+    if (issue.latitude && issue.longitude && 
+        issue.latitude !== 0 && issue.longitude !== 0) {
+      console.log('Using direct latitude/longitude from issue data');
+      return {
+        latitude: issue.latitude,
+        longitude: issue.longitude
+      };
+    }
+    
+    // If not available, check if we have coordinates in a different format
+    if (issue.coordinates) {
+      console.log('Using coordinates object from issue data');
+      return {
+        latitude: issue.coordinates.latitude || 0,
+        longitude: issue.coordinates.longitude || 0
+      };
+    }
+    
+    // Last resort: If issue has location field but not coordinates,
+    // we could potentially geocode it, but for now return default coordinates
+    // Default to Akdeniz University campus center
+    console.log('Using default campus coordinates');
+    return {
+      latitude: 36.8945,  // Default latitude (campus center)
+      longitude: 30.6520  // Default longitude (campus center)
+    };
+  };
+  
+  // Loading state
+  if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text>Loading...</Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: 'white' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ marginTop: 16 }}>Loading issue details...</Text>
+      </View>
+    );
+  }
+  
+  // Error state
+  if (error || !issue) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20, backgroundColor: 'white' }}>
+        <Ionicons name="alert-circle-outline" size={48} color="#DC2626" />
+        <Text style={{ marginTop: 16, fontSize: 18, fontWeight: 'bold', textAlign: 'center' }}>
+          {error || 'Issue not found'}
+        </Text>
+        <Text style={{ marginTop: 8, textAlign: 'center', color: '#6B7280' }}>
+          We couldn't load the details for this issue.
+        </Text>
+        <Pressable
+          style={{
+            marginTop: 24,
+            backgroundColor: '#3B82F6',
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            borderRadius: 8
+          }}
+          onPress={() => router.back()}
+        >
+          <Text style={{ color: 'white', fontWeight: '600' }}>Go Back</Text>
+        </Pressable>
       </View>
     );
   }
@@ -90,14 +355,25 @@ export default function IssueDetailScreen() {
   // Animasyon için geçerli değerler
   const scrollDistance = Math.max(50, mapHeight - headerHeight);
   
+  // Get coordinates from issue
+  const coordinates = getCoordinates(issue);
+  const hasValidCoordinates = coordinates.latitude !== 0 && coordinates.longitude !== 0;
+  
+  // Log coordinates for debugging
+  console.log('Issue coordinates:', coordinates);
+  console.log('Has valid coordinates:', hasValidCoordinates);
+  
   // Prepare marker for OSMMap
   const issueMarker = {
     id: issue.id,
-    coordinates: issue.coordinates,
+    coordinates: coordinates,
     title: issue.title,
-    description: issue.location,
-    color: 'red'
+    description: getLocationString(issue),
+    color: getStatusColor(issue.status)
   };
+  
+  // Get status timeline for rendering
+  const statusTimeline = getStatusTimeline(issue);
   
   return (
     <View style={{ flex: 1, backgroundColor: 'white' }}>
@@ -108,8 +384,8 @@ export default function IssueDetailScreen() {
         <OSMMap
           style={{ width: '100%', height: '100%' }}
           initialRegion={{
-            latitude: issue.coordinates.latitude,
-            longitude: issue.coordinates.longitude,
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           }}
@@ -212,53 +488,15 @@ export default function IssueDetailScreen() {
               }}
             >
               <View style={{ gap: 4 }}>
-                {/* Received - Always shown */}
-                <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
-                  <View style={{ alignItems: 'center', width: 30 }}>
-                    <View
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        backgroundColor: '#444444',
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <View 
-                        style={{
-                          width: 10, 
-                          height: 10, 
-                          borderRadius: 5, 
-                          backgroundColor: 'white'
-                        }}
-                      />
-                    </View>
-                    <View
-                      style={{
-                        width: 2,
-                        height: 40,
-                        backgroundColor: issue.status === 'in_progress' || issue.status === 'completed' ? '#444444' : '#E5E7EB'
-                      }}
-                    />
-                  </View>
-                  <View>
-                    <Text style={{ fontWeight: 'bold' }}>Received</Text>
-                    <Text style={{ fontSize: 12, color: '#6B7280' }}>{formatDate(issue.date)}</Text>
-                    <Text style={{ fontSize: 14, marginTop: 4 }}>Your issue has been received and is being reviewed.</Text>
-                  </View>
-                </View>
-                
-                {/* In Progress - Shown if status is in_progress or completed */}
-                {(issue.status === 'in_progress' || issue.status === 'completed') && (
-                  <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
+                {statusTimeline.map((statusItem, index) => (
+                  <View key={statusItem.status} style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
                     <View style={{ alignItems: 'center', width: 30 }}>
                       <View
                         style={{
                           width: 20,
                           height: 20,
                           borderRadius: 10,
-                          backgroundColor: '#F59E0B',
+                          backgroundColor: getStatusColor(statusItem.status),
                           justifyContent: 'center',
                           alignItems: 'center'
                         }}
@@ -272,65 +510,23 @@ export default function IssueDetailScreen() {
                           }}
                         />
                       </View>
-                      {issue.status === 'completed' && (
+                      {index < statusTimeline.length - 1 && (
                         <View
                           style={{
                             width: 2,
                             height: 40,
-                            backgroundColor: '#F59E0B'
+                            backgroundColor: getStatusColor(statusItem.status)
                           }}
                         />
                       )}
                     </View>
                     <View>
-                      <Text style={{ fontWeight: 'bold' }}>In Progress</Text>
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>
-                        {formatDate(new Date(new Date(issue.date).getTime() + 3*24*60*60*1000).toISOString().split('T')[0])}
-                      </Text>
-                      <Text style={{ fontSize: 14, marginTop: 4 }}>
-                        {issue.status === 'in_progress' 
-                          ? "The issue is currently being addressed by the maintenance team." 
-                          : "The issue was addressed by the maintenance team."}
-                      </Text>
+                      <Text style={{ fontWeight: 'bold' }}>{statusItem.label}</Text>
+                      <Text style={{ fontSize: 12, color: '#6B7280' }}>{formatDate(statusItem.date)}</Text>
+                      <Text style={{ fontSize: 14, marginTop: 4 }}>{statusItem.message}</Text>
                     </View>
                   </View>
-                )}
-                
-                {/* Completed - Only shown if status is completed */}
-                {issue.status === 'completed' && (
-                  <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
-                    <View style={{ alignItems: 'center', width: 30 }}>
-                      <View
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 10,
-                          backgroundColor: '#10B981',
-                          justifyContent: 'center',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <View 
-                          style={{
-                            width: 10, 
-                            height: 10, 
-                            borderRadius: 5, 
-                            backgroundColor: 'white'
-                          }}
-                        />
-                      </View>
-                    </View>
-                    <View>
-                      <Text style={{ fontWeight: 'bold' }}>Completed</Text>
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>
-                        {formatDate(new Date(new Date(issue.date).getTime() + 7*24*60*60*1000).toISOString().split('T')[0])}
-                      </Text>
-                      <Text style={{ fontSize: 14, marginTop: 4 }}>
-                        The issue has been successfully resolved.
-                      </Text>
-                    </View>
-                  </View>
-                )}
+                ))}
               </View>
             </View>
           </View>
@@ -365,7 +561,7 @@ export default function IssueDetailScreen() {
                     </View>
                     <View>
                       <Text style={{ color: '#6B7280', fontSize: 12 }}>Department</Text>
-                      <Text style={{ fontWeight: '500' }}>{issue.department}</Text>
+                      <Text style={{ fontWeight: '500' }}>{getDepartmentName(issue)}</Text>
                     </View>
                   </View>
                   
@@ -378,7 +574,7 @@ export default function IssueDetailScreen() {
                     </View>
                     <View>
                       <Text style={{ color: '#6B7280', fontSize: 12 }}>Location</Text>
-                      <Text style={{ fontWeight: '500' }}>{issue.location}</Text>
+                      <Text style={{ fontWeight: '500' }}>{getLocationString(issue)}</Text>
                     </View>
                   </View>
                   
@@ -391,7 +587,29 @@ export default function IssueDetailScreen() {
                     </View>
                     <View>
                       <Text style={{ color: '#6B7280', fontSize: 12 }}>Date Reported</Text>
-                      <Text style={{ fontWeight: '500' }}>{formatDate(issue.date)}</Text>
+                      <Text style={{ fontWeight: '500' }}>{formatDate(issue.createdAt || issue.date)}</Text>
+                    </View>
+                  </View>
+                  
+                  {/* Status */}
+                  <View style={{ height: 1, backgroundColor: '#E5E7EB' }} />
+                  
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                    <View style={{ 
+                      backgroundColor: `${getStatusColor(issue.status)}20`, 
+                      padding: 8, 
+                      borderRadius: 8 
+                    }}>
+                      <Ionicons name="checkmark-circle" size={16} color={getStatusColor(issue.status)} />
+                    </View>
+                    <View>
+                      <Text style={{ color: '#6B7280', fontSize: 12 }}>Current Status</Text>
+                      <Text style={{ 
+                        fontWeight: '500',
+                        color: getStatusColor(issue.status)
+                      }}>
+                        {getStatusLabel(issue.status)}
+                      </Text>
                     </View>
                   </View>
                 </View>

@@ -17,7 +17,7 @@ export const API_ENDPOINTS = {
   },
   ISSUES: {
     LIST: '/issue/issues',
-    CREATE: '/issue/issues',
+    CREATE: '/issue/issues/report',
     DETAIL: (id: string) => `/issue/issues/${id}`,
     USER_ISSUES: '/issue/issues/user',
     UPDATE_STATUS: (id: string) => `/issue/issues/${id}/status`,

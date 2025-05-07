@@ -64,6 +64,7 @@ The project uses a Domain-Driven Design (DDD) approach.
 | `POST` | `/issues/report` | Report a new issue |
 | `GET` | `/issues/{id}` | Retrieve issue details |
 | `GET` | `/issues/user/{userId}` | Retrieve all issues for a specific user |
+| `GET` | `/issues` | Retrieve all issues |
 | `PUT` | `/issues/{id}/status` | Update issue status |
 
 ---
@@ -91,40 +92,33 @@ The project uses a Domain-Driven Design (DDD) approach.
 ## 🔐 MongoDB Access
 
 ### Connection Details
-MongoDB runs in a Docker container with authentication enabled. Here are the details:
+The project now uses MongoDB Atlas - a cloud database service. Connection details:
 
 | Setting | Value |
 |---------|-------|
-| Host | `localhost` (or your server's IP address) |
-| Port | `27017` |
-| Username | `root` |
-| Password | `example` |
+| Connection Type | MongoDB Atlas Cloud |
+| Connection Format | `mongodb+srv://<username>:<password>@<cluster>.mongodb.net/` |
 | Database | `IssueDb` |
 | Collection | `issues` |
 
-### Access with MongoDB Compass
+### Connecting with MongoDB Compass
 1. Download and install [MongoDB Compass](https://www.mongodb.com/products/compass)
-2. Use the following connection string:
+2. Use your Atlas connection string:
 ```
-mongodb://root:example@localhost:27017/
+mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
 ```
-3. Once connected, select the `IssueDb` database to view the `issues` collection
+3. Important: Add `?retryWrites=true&w=majority&authSource=admin` parameters
+4. Once connected, select the `IssueDb` database to view the `issues` collection
 
-### Access from Another Application
-Use this connection string format:
+### Access from .NET Application
+Use the connection string provided by MongoDB Atlas Dashboard:
 ```
-mongodb://root:example@[host-ip]:27017/
-```
-
-### Programmatic Access (C#)
-```csharp
-var client = new MongoClient("mongodb://root:example@localhost:27017/");
-var database = client.GetDatabase("IssueDb");
-var collection = database.GetCollection<Issue>("issues");
+mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
 ```
 
-### Remote Access
-The MongoDB server is configured to accept connections from any IP address. If connecting from outside your network, ensure port 27017 is open in your firewall.
+### Network Access & Security
+1. Make sure your IP address is whitelisted in Atlas → Network Access
+2. Create a database user with appropriate permissions in Atlas → Database Access
 
 ---
 
@@ -225,36 +219,6 @@ All tests have passed successfully, indicating that the service is working as ex
 
 ---
 
-## 🐳 Docker Compose Setup
-
-Running services via Docker Compose:
-
-| Service | Description | Port |
-|---------|-------------|------|
-| MongoDB | NoSQL Database | `27017` |
-| RabbitMQ | Message broker + UI | `5672`, `15672` |
-| IssueService | Issue API Service | `5240` |
-
-Run using:
-
-```bash
-docker compose up -d
-```
-
-This will start all services with the correct configuration:
-- MongoDB with authentication enabled
-- RabbitMQ with management UI
-- Issue Service API with Swagger UI
-
-### Docker Compose Configuration
-The configuration in `docker-compose.yml` includes:
-- MongoDB with username/password authentication
-- MongoDB accessible from any IP address
-- Issue Service configured to connect to MongoDB and RabbitMQ
-- Persistent volume storage for both MongoDB and RabbitMQ
-
----
-
 ## 🔧 Local Development
 
 To run locally without Docker:
@@ -293,92 +257,83 @@ dotnet run
 
 Access Swagger UI at:
 
-```
+```bash
 http://localhost:5240/swagger
 ```
 
 ---
 
+## 🐳 Docker Compose Setup
+Run all services via Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+This starts:
+- MongoDB (port 27017)
+- RabbitMQ (ports 5672 & 15672)
+- IssueService API (port 5240)
+
+## 🔧 Local Development
+To run the API locally without Docker:
+1. Ensure a MongoDB instance and RabbitMQ are running on localhost.
+2. In `IssueService/appsettings.Development.json`, set:
+    ```json
+    "MongoDB": {
+      "ConnectionString": "mongodb://root:example@localhost:27017/",
+      "Database": "IssueDb"
+    }
+    ```
+3. Start the API:
+    ```bash
+    cd IssueService
+    dotnet run
+    ```
+4. Visit Swagger UI: `http://localhost:5240/swagger`
+
+## ☁️ Using MongoDB Atlas
+To switch to a shared Atlas cluster:
+1. Create a free-tier cluster on MongoDB Atlas.
+2. Whitelist your IP under **Network Access**.
+3. Add a database user under **Database Access** (read/write).
+4. Update `appsettings.Development.json`:
+    ```json
+    "MongoDB": {
+      "ConnectionString": "mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/IssueDb?retryWrites=true&w=majority",
+      "Database": "IssueDb"
+    }
+    ```
+5. Restart the API (`dotnet run`).
+
 ## 📱 Sample API Usage
+**List all issues**
+```http
+GET /issues
+```
+**Report a new issue**
+```http
+POST /issues/report
+Content-Type: application/json
 
-### 1. Report an Issue (POST /issues/report)
-
-```json
 {
-  "title": "Broken light",
-  "description": "Street light is broken near the North Campus entrance",
+  "title": "Example",
+  "description": "Details",
   "category": "Infrastructure",
-  "photoUrl": "https://example.com/photos/broken-light.jpg",
-  "userId": "user123456",
+  "photoUrl": "https://...",
+  "userId": "user1",
   "departmentId": 2,
-  "latitude": 41.0082,
-  "longitude": 28.9784
+  "latitude": 41.0,
+  "longitude": 29.0
 }
 ```
 
-### 2. Get User Issues (GET /issues/user/{userId})
-Request:
-```
-GET /issues/user/user123456
-```
-
-Response:
-```json
-[
-  {
-    "id": "608d5e47b6f1a3c6c03fef01",
-    "title": "Broken light",
-    "description": "Street light is broken near the North Campus entrance",
-    "category": "Infrastructure",
-    "photoUrl": "https://example.com/photos/broken-light.jpg",
-    "userId": "user123456",
-    "departmentId": 2,
-    "latitude": 41.0082,
-    "longitude": 28.9784,
-    "status": "Pending",
-    "createdAt": "2025-04-20T14:22:00Z"
-  },
-  {
-    "id": "608d5e47b6f1a3c6c03fef02",
-    "title": "Water leak",
-    "description": "Water leak in Engineering Building",
-    "category": "Plumbing",
-    "photoUrl": "https://example.com/photos/water-leak.jpg",
-    "userId": "user123456",
-    "departmentId": 1,
-    "latitude": 41.0090,
-    "longitude": 28.9750,
-    "status": "Resolved",
-    "createdAt": "2025-04-18T09:15:00Z"
-  }
-]
-```
-
----
-
 ## 🔥 Key Concepts Used
-
-| Concept | Description |
-|---------|-------------|
-| **Aggregate** | `Issue` is the Aggregate Root. |
-| **Domain Events** | `IssueCreatedEvent`, `IssueStatusChangedEvent` managed internally. |
-| **Event Publisher** | RabbitMQ used to dispatch events externally. |
-| **MediatR** | In-memory domain event dispatcher. |
-| **MongoDB** | Flexible NoSQL database. |
-| **RabbitMQ** | Asynchronous microservice communication. |
-| **Geolocation** | Captures precise issue locations with coordinates. |
-| **Swagger** | API Documentation & testing tool. |
-
----
+- Aggregate Root (Issue)
+- Domain Events with MediatR
+- MongoDB for persistence
+- RabbitMQ for messaging
+- Swagger for API documentation
 
 # 🌟 Summary
-
-- Domain Driven Design principles applied.
-- RabbitMQ integration for event-driven architecture.
-- MongoDB used for flexible data storage.
-- Docker Compose configured for multi-container orchestration.
-- API easily testable through Swagger UI.
-- Geolocation tracking for precise issue locations.
-- Department integration for cross-service communication.
-- Comprehensive test coverage with all tests passing.
-- User-specific issue listing capabilities.
+IssueService is a .NET 8 microservice using DDD principles to report and track issues with event-driven notifications.

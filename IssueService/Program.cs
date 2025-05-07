@@ -26,6 +26,17 @@ builder.Services.AddScoped<IIssueService, IssueServiceImpl>();
 // RabbitMQ Producer
 builder.Services.AddSingleton<IssueService.Messaging.Interfaces.IRabbitMQProducer, IssueService.Messaging.Implementations.RabbitMQProducer>();
 
+// CORS policy ekle
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Controllers
 builder.Services.AddControllers();
 
@@ -42,6 +53,7 @@ if (app.Environment.IsDevelopment())
 }
 
 //app.UseHttpsRedirection();
+app.UseCors("AllowAll");
 app.UseAuthorization();
 app.MapControllers();
 

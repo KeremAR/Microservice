@@ -24,7 +24,7 @@ public class IssueServiceImpl : IIssueService
         _mediator = mediator;
     }
 
-    public async Task<IssueResponse> ReportIssueAsync(CreateIssueRequest request)
+    public async Task<Issue> ReportIssueAsync(CreateIssueRequest request)
     {
         // 1) Aggregate root'tan yeni issue oluştur
         var issue = new Issue(
@@ -44,16 +44,16 @@ public class IssueServiceImpl : IIssueService
         await DispatchEventsAsync(issue);
 
         // 4) Response DTO'su dön
-        return new IssueResponse(issue);
+        return issue;
     }
 
-    public async Task<IssueResponse> GetIssueByIdAsync(string id)
+    public async Task<Issue> GetIssueByIdAsync(string id)
     {
         var issue = await _repository.GetByIdAsync(id);
         if (issue == null)
             throw new KeyNotFoundException("Issue not found");
             
-        return new IssueResponse(issue);
+        return issue;
     }
 
     public async Task UpdateIssueStatusAsync(string id, IssueStatus status)
@@ -75,16 +75,22 @@ public class IssueServiceImpl : IIssueService
         await DispatchEventsAsync(issue);
     }
 
-    public async Task<IEnumerable<IssueResponse>> GetIssuesByUserIdAsync(string userId)
+    public async Task<IEnumerable<Issue>> GetIssuesByUserIdAsync(string userId)
     {
         var issues = await _repository.GetByUserIdAsync(userId);
-        return issues.Select(issue => new IssueResponse(issue));
+        return issues;
     }
 
-    public async Task<IEnumerable<IssueResponse>> GetAllIssuesAsync()
+    public async Task<IEnumerable<Issue>> GetAllIssuesAsync()
     {
         var issues = await _repository.GetAllAsync();
-        return issues.Select(issue => new IssueResponse(issue));
+        return issues;
+    }
+
+    public async Task<IEnumerable<Issue>> GetIssuesByDepartmentIdAsync(int departmentId)
+    {
+        var issues = await _repository.GetByDepartmentIdAsync(departmentId);
+        return issues;
     }
 
     private async Task DispatchEventsAsync(Issue issue)

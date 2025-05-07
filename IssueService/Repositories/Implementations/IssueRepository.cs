@@ -3,6 +3,7 @@ using MongoDB.Driver;
 using IssueService.Data;
 using IssueService.Domain.IssueAggregate;
 using IssueService.Repositories.Interfaces;
+using System.Collections.Generic;
 
 namespace IssueService.Repositories.Implementations;
 
@@ -37,5 +38,12 @@ public class IssueRepository : IIssueRepository
         var update = Builders<Issue>.Update.Set("Status", status); // field name as string
         
         await _context.Issues.UpdateOneAsync(filter, update);
+    }
+
+    public async Task<IEnumerable<Issue>> GetByUserIdAsync(string userId)
+    {
+        return await _context.Issues
+            .Find(i => i.UserId == userId)
+            .ToListAsync();
     }
 }

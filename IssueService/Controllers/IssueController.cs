@@ -40,6 +40,13 @@ public class IssueController : ControllerBase
         return Ok(issues);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> GetAllIssues()
+    {
+        var issues = await _service.GetAllIssuesAsync();
+        return Ok(issues);
+    }
+
     [HttpPut("{id}/status")]
     public async Task<IActionResult> UpdateStatus(string id, [FromBody] string status)
     {

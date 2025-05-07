@@ -10,13 +10,15 @@ public class Issue : BaseEntity
     public string Category { get; private set; }
     public string PhotoUrl { get; private set; }
     public string UserId { get; private set; }
-    public string DepartmentId { get; private set; }
+    public int DepartmentId { get; private set; }
+    public double Latitude { get; private set; }
+    public double Longitude { get; private set; }
     public IssueStatus Status { get; private set; } = IssueStatus.Pending;
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
 
     private Issue() { } // Mongo için boş ctor
 
-    public Issue(string title, string description, string category, string photoUrl, string userId, string departmentId)
+    public Issue(string title, string description, string category, string photoUrl, string userId, int departmentId, double latitude, double longitude)
     {
         Title = title;
         Description = description;
@@ -24,6 +26,8 @@ public class Issue : BaseEntity
         PhotoUrl = photoUrl;
         UserId = userId;
         DepartmentId = departmentId;
+        Latitude = latitude;
+        Longitude = longitude;
 
         AddEvent(new IssueCreatedEvent(this));
     }

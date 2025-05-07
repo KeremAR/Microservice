@@ -6,6 +6,8 @@ using IssueService.Repositories.Interfaces;
 using IssueService.Services.Interfaces;
 using MediatR;
 using System.Threading;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace IssueService.Services.Implementations;
 
@@ -31,7 +33,9 @@ public class IssueServiceImpl : IIssueService
             category: request.Category,
             photoUrl: request.PhotoUrl,
             userId: request.UserId,
-            departmentId: request.DepartmentId);
+            departmentId: request.DepartmentId,
+            latitude: request.Latitude,
+            longitude: request.Longitude);
 
         // 2) MongoDB'ye kaydet
         await _repository.CreateAsync(issue);
@@ -69,6 +73,12 @@ public class IssueServiceImpl : IIssueService
 
         // 4) Domain event varsa yayınla
         await DispatchEventsAsync(issue);
+    }
+
+    public async Task<IEnumerable<IssueResponse>> GetIssuesByUserIdAsync(string userId)
+    {
+        var issues = await _repository.GetByUserIdAsync(userId);
+        return issues.Select(issue => new IssueResponse(issue));
     }
 
     private async Task DispatchEventsAsync(Issue issue)

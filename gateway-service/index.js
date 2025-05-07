@@ -59,15 +59,11 @@ const logProvider = (provider) => {
   };
 };
 
-// Proxy middleware options
-const options = {
+// Proxy routes with URLs from environment variables
+app.use('/user', createProxyMiddleware({
+  target: USER_SERVICE_URL,
   changeOrigin: true,
-  pathRewrite: {
-    '^/user': '/',
-    '^/department': '/',
-    '^/issue': '/',
-    '^/notification': '/'
-  },
+  pathRewrite: { '^/user': '' },
   logLevel: 'debug',
   logProvider,
   onProxyReq: (proxyReq, req, res) => {
@@ -76,90 +72,50 @@ const options = {
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
   }
-};
-
-// Helper function to make an HTTP request and return a promise
-function makeRequest(options, data = null) {
-  return new Promise((resolve, reject) => {
-    console.log(`Making request to: ${options.hostname}:${options.port}${options.path}`);
-    
-    const req = http.request(options, (res) => {
-      let responseData = '';
-      
-      res.on('data', (chunk) => {
-        responseData += chunk;
-      });
-      
-      res.on('end', () => {
-        console.log(`Received response from ${options.hostname}:${options.port}${options.path} with status: ${res.statusCode}`);
-        
-        if (res.statusCode >= 400) {
-          return reject({
-            statusCode: res.statusCode,
-            message: `Service returned error: ${res.statusCode}`,
-            data: responseData
-          });
-        }
-        
-        try {
-          // Try to parse as JSON
-          const parsedData = JSON.parse(responseData);
-          resolve(parsedData);
-        } catch (error) {
-          // If not valid JSON, return as string
-          resolve(responseData);
-        }
-      });
-    });
-    
-    req.on('error', (error) => {
-      console.error(`Error in request to ${options.hostname}:${options.port}${options.path}: ${error.message}`);
-      reject({
-        statusCode: 500,
-        message: `Request failed: ${error.message}`,
-        error
-      });
-    });
-    
-    req.on('timeout', () => {
-      console.error(`Request to ${options.hostname}:${options.port}${options.path} timed out`);
-      req.destroy();
-      reject({
-        statusCode: 504,
-        message: 'Request timed out'
-      });
-    });
-    
-    // Set a timeout of 10 seconds
-    req.setTimeout(10000);
-    
-    if (data) {
-      req.write(JSON.stringify(data));
-    }
-    
-    req.end();
-  });
-}
-
-// Proxy routes with URLs from environment variables
-app.use('/user', createProxyMiddleware({
-  ...options,
-  target: USER_SERVICE_URL
 }));
 
 app.use('/department', createProxyMiddleware({
-  ...options,
-  target: DEPARTMENT_SERVICE_URL
+  target: DEPARTMENT_SERVICE_URL,
+  changeOrigin: true,
+  pathRewrite: { '^/department': '' },
+  logLevel: 'debug',
+  logProvider,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
+  }
 }));
 
 app.use('/issue', createProxyMiddleware({
-  ...options,
-  target: ISSUE_SERVICE_URL
+  target: ISSUE_SERVICE_URL,
+  changeOrigin: true,
+  pathRewrite: { '^/issue': '' },
+  logLevel: 'debug',
+  logProvider,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+    console.log(`[Gateway] Request headers:`, req.headers);
+    console.log(`[Gateway] ProxyReq path: ${proxyReq.path}`);
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
+  }
 }));
 
 app.use('/notification', createProxyMiddleware({
-  ...options,
-  target: NOTIFICATION_SERVICE_URL
+  target: NOTIFICATION_SERVICE_URL,
+  changeOrigin: true,
+  pathRewrite: { '^/notification': '' },
+  logLevel: 'debug',
+  logProvider,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
+  }
 }));
 
 // Home route

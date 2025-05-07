@@ -88,6 +88,46 @@ The project uses a Domain-Driven Design (DDD) approach.
 
 ---
 
+## 🔐 MongoDB Access
+
+### Connection Details
+MongoDB runs in a Docker container with authentication enabled. Here are the details:
+
+| Setting | Value |
+|---------|-------|
+| Host | `localhost` (or your server's IP address) |
+| Port | `27017` |
+| Username | `root` |
+| Password | `example` |
+| Database | `IssueDb` |
+| Collection | `issues` |
+
+### Access with MongoDB Compass
+1. Download and install [MongoDB Compass](https://www.mongodb.com/products/compass)
+2. Use the following connection string:
+```
+mongodb://root:example@localhost:27017/
+```
+3. Once connected, select the `IssueDb` database to view the `issues` collection
+
+### Access from Another Application
+Use this connection string format:
+```
+mongodb://root:example@[host-ip]:27017/
+```
+
+### Programmatic Access (C#)
+```csharp
+var client = new MongoClient("mongodb://root:example@localhost:27017/");
+var database = client.GetDatabase("IssueDb");
+var collection = database.GetCollection<Issue>("issues");
+```
+
+### Remote Access
+The MongoDB server is configured to accept connections from any IP address. If connecting from outside your network, ensure port 27017 is open in your firewall.
+
+---
+
 ## 🐇 RabbitMQ Integration
 
 - **Queue Name**: `issue_created`
@@ -201,6 +241,18 @@ Run using:
 docker compose up -d
 ```
 
+This will start all services with the correct configuration:
+- MongoDB with authentication enabled
+- RabbitMQ with management UI
+- Issue Service API with Swagger UI
+
+### Docker Compose Configuration
+The configuration in `docker-compose.yml` includes:
+- MongoDB with username/password authentication
+- MongoDB accessible from any IP address
+- Issue Service configured to connect to MongoDB and RabbitMQ
+- Persistent volume storage for both MongoDB and RabbitMQ
+
 ---
 
 ## 🔧 Local Development
@@ -219,20 +271,23 @@ To run locally without Docker:
     }
   },
   "MongoDB": {
-    "ConnectionString": "mongodb://localhost:27017",
-    "Database": "issuedb"
+    "ConnectionString": "mongodb://root:example@localhost:27017/",
+    "Database": "IssueDb"
   },
   "RabbitMQ": {
     "Host": "localhost",
-    "Username": "guest",
-    "Password": "guest"
+    "Port": 5672,
+    "UserName": "guest",
+    "Password": "guest",
+    "QueueName": "issue_created"
   }
 }
 ```
 
-3. Run the application:
+3. Run the application from the IssueService directory:
 
 ```bash
+cd IssueService
 dotnet run
 ```
 

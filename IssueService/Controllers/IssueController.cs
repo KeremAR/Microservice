@@ -48,14 +48,52 @@ public class IssueController : ControllerBase
     }
 
     [HttpPut("{id}/status")]
-    public async Task<IActionResult> UpdateStatus(string id, [FromBody] string status)
+    public async Task<IActionResult> UpdateStatus(string id, [FromBody] UpdateStatusRequest request)
     {
-        if (!Enum.TryParse<IssueStatus>(status, out var issueStatus))
+        if (request == null || string.IsNullOrEmpty(request.Status))
+        {
+            return BadRequest("Status field is required");
+        }
+
+        // API'de status değeri string olarak gelir ("0", "1", "2")
+        // Bu değeri önce int'e, sonra enum'a dönüştürelim
+        if (int.TryParse(request.Status, out int statusValue))
+        {
+            // Statusun sayısal değere göre enum'a dönüştürülmesi
+            IssueStatus issueStatus;
+            switch (statusValue)
+            {
+                case 0:
+                    issueStatus = IssueStatus.Pending;
+                    break;
+                case 1:
+                    issueStatus = IssueStatus.InProgress;
+                    break;
+                case 2:
+                    issueStatus = IssueStatus.Resolved;
+                    break;
+                default:
+                    return BadRequest("Invalid status value");
+            }
+
+            await _service.UpdateIssueStatusAsync(id, issueStatus);
+            return NoContent();
+        }
+
+        // Eğer sayı olarak parse edilemezse, enum adıyla parse etmeyi dene
+        if (!Enum.TryParse<IssueStatus>(request.Status, out var enumStatus))
         {
             return BadRequest("Invalid status value");
         }
 
-        await _service.UpdateIssueStatusAsync(id, issueStatus);
+        await _service.UpdateIssueStatusAsync(id, enumStatus);
         return NoContent();
+    }
+
+    [HttpGet("department/{departmentId}")]
+    public async Task<IActionResult> GetDepartmentIssues(int departmentId)
+    {
+        var issues = await _service.GetIssuesByDepartmentIdAsync(departmentId);
+        return Ok(issues);
     }
 }

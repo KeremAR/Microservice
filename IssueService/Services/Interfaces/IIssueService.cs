@@ -6,9 +6,10 @@ namespace IssueService.Services.Interfaces;
 
 public interface IIssueService
 {
-    Task<IssueResponse> ReportIssueAsync(CreateIssueRequest request);
-    Task<IssueResponse> GetIssueByIdAsync(string id);
+    Task<Issue> ReportIssueAsync(CreateIssueRequest request);
+    Task<Issue> GetIssueByIdAsync(string id);
+    Task<IEnumerable<Issue>> GetIssuesByUserIdAsync(string userId);
+    Task<IEnumerable<Issue>> GetAllIssuesAsync();
     Task UpdateIssueStatusAsync(string id, IssueStatus status);
-    Task<IEnumerable<IssueResponse>> GetIssuesByUserIdAsync(string userId);
-    Task<IEnumerable<IssueResponse>> GetAllIssuesAsync();
+    Task<IEnumerable<Issue>> GetIssuesByDepartmentIdAsync(int departmentId);
 }

@@ -10,7 +10,9 @@ public class IssueResponse
     public string Category { get; set; }
     public string PhotoUrl { get; set; }
     public string UserId { get; set; }
-    public string DepartmentId { get; set; }
+    public int DepartmentId { get; set; }
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
     public string Status { get; set; }
     public DateTime CreatedAt { get; set; }
 
@@ -23,6 +25,8 @@ public class IssueResponse
         PhotoUrl = issue.PhotoUrl;
         UserId = issue.UserId;
         DepartmentId = issue.DepartmentId;
+        Latitude = issue.Latitude;
+        Longitude = issue.Longitude;
         Status = issue.Status.ToString();
         CreatedAt = issue.CreatedAt;
     }

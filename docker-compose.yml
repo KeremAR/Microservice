@@ -1,10 +1,26 @@
 version: '3.8'
 
 services:
-  user-service:
-    build: .
+  api-gateway:
+    build: ./gateway-service
     ports:
-      - "8000:8000"
+      - "3000:3000"
+    environment:
+      - NODE_ENV=docker
+    volumes:
+      - ./gateway-service/config:/app/config
+    networks:
+      - microservice-network
+    restart: always
+    depends_on:
+      - user-service
+      - postgres
+      - rabbitmq
+
+  user-service:
+    build: ./user-service2
+    ports:
+      - "5001:8000"
     depends_on:
       postgres:
         condition: service_started
@@ -13,7 +29,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/userdb
     volumes:
-      - .:/app
+      - ./user-service2:/app
+    networks:
+      - microservice-network
 
   postgres:
     image: postgres:14-alpine
@@ -25,6 +43,8 @@ services:
       - POSTGRES_DB=userdb
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - microservice-network
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -36,6 +56,8 @@ services:
       - RABBITMQ_DEFAULT_PASS=password
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - microservice-network
     healthcheck:
       test: ["CMD", "rabbitmqctl", "status"]
       interval: 10s
@@ -45,4 +67,8 @@ services:
 
 volumes:
   postgres_data:
-  rabbitmq_data: 
+  rabbitmq_data:
+
+networks:
+  microservice-network:
+    driver: bridge 

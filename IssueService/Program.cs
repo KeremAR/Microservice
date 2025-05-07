@@ -6,6 +6,8 @@ using IssueService.Services.Interfaces;
 using IssueService.Messaging.Implementations;
 using IssueService.Messaging.Interfaces;
 using MediatR;
+using MongoDB.Driver;
+using MongoDB.Bson;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,5 +44,20 @@ if (app.Environment.IsDevelopment())
 //app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+
+// Ping MongoDB Atlas on startup for connectivity check
+var mongoSettings = MongoClientSettings.FromConnectionString(builder.Configuration["MongoDB:ConnectionString"]);
+mongoSettings.ServerApi = new ServerApi(ServerApiVersion.V1);
+var mongoClient = new MongoClient(mongoSettings);
+try
+{
+    var pingResult = mongoClient.GetDatabase(builder.Configuration["MongoDB:Database"])
+        .RunCommand<BsonDocument>(new BsonDocument("ping", 1));
+    Console.WriteLine($"✨ MongoDB ping succeeded: {pingResult}");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ MongoDB ping failed: {ex.Message}");
+}
 
 app.Run();

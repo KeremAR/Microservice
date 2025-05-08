@@ -60,4 +60,28 @@ public class IssueRepository : IIssueRepository
             .Find(i => i.DepartmentId == departmentId)
             .ToListAsync();
     }
+
+    public async Task<bool> DeleteAsync(string id)
+    {
+        Console.WriteLine($"Repository.DeleteAsync çağrıldı, ID: {id}");
+        try
+        {
+            var objectId = ObjectId.Parse(id);
+            Console.WriteLine($"MongoDB ObjectID oluşturuldu: {objectId}");
+            
+            var filter = Builders<Issue>.Filter.Eq("Id", objectId);
+            Console.WriteLine($"Filter oluşturuldu");
+            
+            var result = await _context.Issues.DeleteOneAsync(filter);
+            Console.WriteLine($"DeleteOne sonucu: DeletedCount={result.DeletedCount}, IsAcknowledged={result.IsAcknowledged}");
+            
+            return result.DeletedCount > 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Repository.DeleteAsync'de hata: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            throw; // Rethrow the exception
+        }
+    }
 }

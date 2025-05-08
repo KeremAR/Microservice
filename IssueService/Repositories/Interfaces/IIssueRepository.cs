@@ -12,4 +12,5 @@ public interface IIssueRepository
     Task<IEnumerable<Issue>> GetByUserIdAsync(string userId);
     Task<IEnumerable<Issue>> GetAllAsync();
     Task<IEnumerable<Issue>> GetByDepartmentIdAsync(int departmentId);
+    Task<bool> DeleteAsync(string id);
 }

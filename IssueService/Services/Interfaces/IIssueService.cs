@@ -12,4 +12,5 @@ public interface IIssueService
     Task<IEnumerable<Issue>> GetAllIssuesAsync();
     Task UpdateIssueStatusAsync(string id, IssueStatus status);
     Task<IEnumerable<Issue>> GetIssuesByDepartmentIdAsync(int departmentId);
+    Task<bool> DeleteIssueAsync(string id);
 }

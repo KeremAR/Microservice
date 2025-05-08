@@ -93,6 +93,35 @@ public class IssueServiceImpl : IIssueService
         return issues;
     }
 
+    public async Task<bool> DeleteIssueAsync(string id)
+    {
+        Console.WriteLine($"DeleteIssueAsync çağrıldı, ID: {id}");
+        try
+        {
+            // Önce issue'nin var olup olmadığını kontrol edelim
+            var issue = await _repository.GetByIdAsync(id);
+            
+            if (issue == null)
+            {
+                Console.WriteLine($"Issue bulunamadı, ID: {id}");
+                throw new KeyNotFoundException("Issue not found");
+            }
+                
+            Console.WriteLine($"Issue bulundu, ID: {id}, Title: {issue.Title}");
+            
+            // Issue'yu sil
+            var result = await _repository.DeleteAsync(id);
+            Console.WriteLine($"Silme işlemi sonucu: {result}");
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DeleteIssueAsync'de hata: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            throw; // Rethrow the exception to propagate it upwards
+        }
+    }
+
     private async Task DispatchEventsAsync(Issue issue)
     {
         foreach (var @event in issue.Events)

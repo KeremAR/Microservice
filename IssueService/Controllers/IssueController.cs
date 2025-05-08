@@ -96,4 +96,35 @@ public class IssueController : ControllerBase
         var issues = await _service.GetIssuesByDepartmentIdAsync(departmentId);
         return Ok(issues);
     }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteIssue(string id)
+    {
+        try
+        {
+            Console.WriteLine($"DeleteIssue endpoint called with ID: {id}");
+            Console.WriteLine($"ID türü: {id?.GetType().FullName}, ID uzunluğu: {id?.Length}");
+            
+            var result = await _service.DeleteIssueAsync(id);
+            if (result)
+            {
+                Console.WriteLine($"Issue with ID {id} successfully deleted");
+                return NoContent(); // 204 No Content
+            }
+            
+            Console.WriteLine($"Issue with ID {id} not found");
+            return NotFound(); // 404 Not Found
+        }
+        catch (KeyNotFoundException ex)
+        {
+            Console.WriteLine($"KeyNotFoundException: {ex.Message}");
+            return NotFound();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in DeleteIssue: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            return StatusCode(500, ex.Message);
+        }
+    }
 }

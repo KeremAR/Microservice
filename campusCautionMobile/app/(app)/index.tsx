@@ -17,7 +17,7 @@ import { Link, useRouter, useFocusEffect } from 'expo-router';
 import { mockIssues, mockNotifications, mockStats, campusMapRegion } from '../../data/mockData';
 import OSMMap from '../../components/OSMMap';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserProfile, getIssues, getUserIssues } from '../../services/api';
+import { getUserProfile, getIssues, getUserIssues, getStats } from '../../services/api';
 
 // Kullanıcı profili için tip tanımlaması
 interface UserProfile {
@@ -34,7 +34,7 @@ interface Issue {
   hexId: string; // Hexadecimal string representation of ObjectId
   title: string;
   description: string;
-  status: string;
+  status: string | number; // Can be string like 'completed' or numeric like 0,1,2,3
   latitude?: number;
   longitude?: number;
   departmentId?: number;
@@ -87,15 +87,19 @@ const bannerText = 'Together, we make our campus better.';
 export default function HomeScreen() {
   const router = useRouter();
   const screenWidth = Dimensions.get('window').width;
-  const { user, token } = useAuth();
+  const { user, token, logout } = useAuth();
   
   // States for user data and loading
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
   const [userIssues, setUserIssues] = useState<Issue[]>([]);
-  const [isLoadingIssues, setIsLoadingIssues] = useState(false);
+  const [receivedCount, setReceivedCount] = useState(0);
+  const [inProgressCount, setInProgressCount] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [notificationsCount, setNotificationsCount] = useState(mockNotifications.length);
+  const [isLoadingIssues, setIsLoadingIssues] = useState(true);
   
   // Get status bar height
   const STATUSBAR_HEIGHT = StatusBar.currentHeight || (Platform.OS === 'ios' ? 44 : 0);
@@ -103,7 +107,6 @@ export default function HomeScreen() {
   // Animation values
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(-20));
-  const [notificationsCount] = useState(mockNotifications.filter(n => !n.read).length);
   const [stats] = useState(mockStats);
   
   // Fetch user profile data
@@ -133,6 +136,59 @@ export default function HomeScreen() {
     }
   };
   
+  // Helper function to check status (handles both string and numeric values)
+  const checkStatus = (issue: Issue, statusTypes: Array<string|number>): boolean => {
+    if (issue.status === undefined || issue.status === null) return false;
+    
+    // Convert the issue status to lowercase string for comparison
+    const statusStr = String(issue.status).toLowerCase();
+    console.log(`Checking status for issue: ${issue.title}, status: ${issue.status} (${typeof issue.status})`);
+    
+    // Check against all possible status values
+    const result = statusTypes.some(type => {
+      if (typeof type === 'number') {
+        return issue.status === type;
+      }
+      return statusStr === String(type).toLowerCase();
+    });
+    
+    return result;
+  };
+  
+  // Calculate statistics from issues data
+  const calculateStats = (issues: Issue[]) => {
+    if (!Array.isArray(issues)) {
+      console.log('Issues is not an array, cannot calculate stats');
+      return;
+    }
+    
+    console.log(`Calculating stats from ${issues.length} issues`);
+    
+    // Eğer API'den gelen status değerleri alanı görmek için önce kontrol edelim
+    if (issues.length > 0) {
+      console.log('First issue status sample:', issues[0].status, typeof issues[0].status);
+      console.log('All status values in data:', issues.map(i => i.status));
+    }
+    
+    const newCount = issues.filter(issue => 
+      checkStatus(issue, ['received', 'new', 'pending', 'submitted', 'open', '0', 0])
+    ).length;
+    
+    const activeCount = issues.filter(issue => 
+      checkStatus(issue, ['inprogress', 'in_progress', 'in progress', 'processing', 'working', '1', 1])
+    ).length;
+    
+    const doneCount = issues.filter(issue => 
+      checkStatus(issue, ['completed', 'done', 'resolved', 'fixed', '2', 2])
+    ).length;
+    
+    console.log('Calculated stats from issues:', { newCount, activeCount, doneCount });
+    
+    setReceivedCount(newCount);
+    setInProgressCount(activeCount);
+    setCompletedCount(doneCount);
+  };
+  
   // Fetch all issues
   const fetchAllIssues = async () => {
     if (!token) return;
@@ -140,25 +196,21 @@ export default function HomeScreen() {
     setIsLoadingIssues(true);
     
     try {
-      // Fetch all issues
-      const issues = await getIssues(token);
-      console.log('All issues fetched:', issues.length);
-      
-      // Fetch user issues
+      // İstatistikleri hesaplamak için sadece kullanıcının sorunlarını getirelim
       const userIssuesData = await getUserIssues(token);
       console.log('User issues fetched:', userIssuesData.length);
       
-      // Mark which issues belong to the current user
-      const userIssueIds = new Set(userIssuesData.map((issue: Issue) => issue.id));
+      if (userIssuesData && userIssuesData.length > 0) {
+        console.log('Sample user issue data structure:', JSON.stringify(userIssuesData[0], null, 2));
+        console.log('User issues status values:', userIssuesData.map((issue: Issue) => `${issue.title}: ${issue.status}`));
+      }
       
-      // Process all issues and mark user's issues
-      const processedIssues = Array.isArray(issues) ? issues.map((issue: Issue) => ({
-        ...issue,
-        isUserIssue: userIssueIds.has(issue.id)
-      })) : [];
-      
-      setAllIssues(processedIssues);
+      // Kullanıcıya ait sorunları listeleyip, tüm istatistikleri hesaplayalım
+      setAllIssues(userIssuesData);
       setUserIssues(userIssuesData);
+      
+      // Calculate stats directly from user issues data
+      calculateStats(userIssuesData);
       
     } catch (err: any) {
       console.error('Failed to fetch issues:', err);
@@ -200,28 +252,48 @@ export default function HomeScreen() {
   }, []);
   
   const navigateToIssueDetail = (issueId: string) => {
+    console.log(`Navigating to issue detail with ID: ${issueId}`);
+    
+    if (!issueId) {
+      console.error('Invalid issue ID for navigation');
+      return;
+    }
+    
     router.push(`/issue-detail?id=${issueId}`);
   };
   
   // Process markers for OSMMap from real issues data
   const mapMarkers = allIssues
-    .filter(issue => issue.status !== 'Completed' && issue.latitude && issue.longitude) 
-    .map(issue => ({
-      id: issue.hexId, // Use hexId instead of id
-      coordinates: {
-        latitude: issue.latitude || 0,
-        longitude: issue.longitude || 0,
-      },
-      title: issue.title,
-      description: issue.description,
-      color: issue.isUserIssue ? 'red' : 'blue', // User's issues in red
-      isUserIssue: issue.isUserIssue
-    }));
-  
-  // Calculate counts by status
-  const receivedCount = allIssues.filter(issue => issue.status === 'Received' || issue.status === 'New').length;
-  const inProgressCount = allIssues.filter(issue => issue.status === 'InProgress' || issue.status === 'Processing').length;
-  const completedCount = allIssues.filter(issue => issue.status === 'Completed' || issue.status === 'Done').length;
+    .filter(issue => {
+      // Check if status is not completed (handling both string and numeric formats)
+      const statusStr = String(issue.status || '').toLowerCase();
+      const isCompleted = statusStr === 'completed' || 
+                          statusStr === 'done' || 
+                          statusStr === '2' || 
+                          issue.status === 2;
+      
+      // Log to debug coordinate data
+      console.log(`Issue ${issue.title} - Coords: lat=${issue.latitude}, lng=${issue.longitude}`);
+      
+      return !isCompleted && issue.latitude && issue.longitude;
+    })
+    .map(issue => {
+      // Check if we have a hexId, otherwise use id (converted to string)
+      const issueId = issue.hexId || (issue.id ? issue.id.toString() : '');
+      console.log(`Adding marker for issue: ${issue.title}, ID: ${issueId}`);
+      
+      return {
+        id: issueId,
+        coordinates: {
+          latitude: issue.latitude || 0,
+          longitude: issue.longitude || 0,
+        },
+        title: issue.title,
+        description: issue.description,
+        color: '#3B82F6', // Consistent blue color for all issues
+        isUserIssue: true
+      };
+    });
   
   // Get user's name - from API if available, fallback to auth context
   const getUserName = () => {
@@ -248,6 +320,7 @@ export default function HomeScreen() {
   console.log('Home - User profile state:', userProfile);
   console.log('Home - Calculated name:', getUserName());
   console.log('Home - Map markers:', mapMarkers.length);
+  console.log('Home - Stats:', { receivedCount, inProgressCount, completedCount });
   
   return (
     <View style={styles.container}>

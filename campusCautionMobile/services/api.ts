@@ -261,9 +261,9 @@ export const getUserIssues = async (token: string) => {
       return [];
     }
     
-    // Build URL with the userId parameter
+    // Doğru URL formatıyla oluştur: http://localhost:3000/issue/issues/user/{userId}
     const url = `${API_BASE_URL}/issue/issues/user/${userId}`;
-    console.log('API URL:', url);
+    console.log('API URL for user issues:', url);
     console.log('Token:', token ? `${token.substring(0, 15)}...` : 'Token yok');
     
     const response = await fetch(url, {
@@ -346,20 +346,75 @@ export const getNotifications = async (token: string) => {
 // İstatistikleri getirme (yeni, aktif, tamamlanmış sorun sayıları)
 export const getStats = async (token: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/stats`, {
+    console.log('-------- API: getStats çağrıldı --------');
+    
+    // Use the endpoint from the config
+    const url = `${API_BASE_URL}${API_ENDPOINTS.ISSUES.STATISTICS}`;
+    
+    console.log('Stats API URL:', url);
+    console.log('Token:', token ? `${token.substring(0, 15)}...` : 'Token yok');
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(token),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'İstatistikler alınamadı');
+    console.log('Stats API yanıtı alındı');
+    console.log('Status kodu:', response.status);
+    
+    if (response.status === 404) {
+      console.log('Statistics endpoint not found (404), API may not support this feature');
+      // Return default values
+      return { new: 0, active: 0, completed: 0 };
     }
-
-    return await response.json();
+    
+    const responseText = await response.text();
+    console.log('Yanıt metni:', responseText);
+    
+    let data;
+    try {
+      // Parse JSON response
+      data = responseText ? JSON.parse(responseText) : {};
+      console.log('Stats data parsed successfully');
+    } catch (e) {
+      console.error('JSON parse hatası:', e);
+      throw new Error('Invalid statistics data format');
+    }
+    
+    if (!response.ok) {
+      console.error('Stats API call failed:', data);
+      throw new Error(data.message || data.error || 'Failed to get statistics');
+    }
+    
+    // Map backend response to our expected format
+    // The backend might return data in different formats, so we check for common patterns
+    const statsResult = {
+      new: 0,
+      active: 0, 
+      completed: 0
+    };
+    
+    // Try to extract stats from various possible formats
+    if (data.new !== undefined) statsResult.new = data.new;
+    else if (data.pending !== undefined) statsResult.new = data.pending;
+    else if (data.received !== undefined) statsResult.new = data.received;
+    else if (data.status0 !== undefined) statsResult.new = data.status0;
+    
+    if (data.active !== undefined) statsResult.active = data.active;
+    else if (data.inProgress !== undefined) statsResult.active = data.inProgress;
+    else if (data.processing !== undefined) statsResult.active = data.processing;
+    else if (data.status1 !== undefined) statsResult.active = data.status1;
+    
+    if (data.completed !== undefined) statsResult.completed = data.completed;
+    else if (data.done !== undefined) statsResult.completed = data.done;
+    else if (data.resolved !== undefined) statsResult.completed = data.resolved;
+    else if (data.status2 !== undefined) statsResult.completed = data.status2;
+    
+    console.log('Mapped stats result:', statsResult);
+    return statsResult;
   } catch (error) {
     console.error('Stats fetch error:', error);
-    // Eğer istatistik API'si henüz mevcut değilse varsayılan değer döndür
+    // Return default values if the API call fails
     return { new: 0, active: 0, completed: 0 };
   }
 };

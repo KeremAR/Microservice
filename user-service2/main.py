@@ -15,6 +15,8 @@ import asyncio
 from aio_pika import connect, Message, ExchangeType, DeliveryMode
 from fastapi import Depends, Header
 import jwt
+from typing import Optional, Dict, Any
+from supabase import create_client, Client
 
 load_dotenv()
 
@@ -34,46 +36,157 @@ if not firebase_admin._apps:
     cred = credentials.Certificate("serviceAccountKey.json")
     firebase_admin.initialize_app(cred)
 
+# Supabase init
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase_client: Optional[Client] = None
+
 # PostgreSQL connection
 def get_db_connection():
-    # Eski bağlantı
-    # return psycopg2.connect(os.getenv("DATABASE_URL"))
-    
     # Supabase PostgreSQL bağlantısı
-    return psycopg2.connect(
-        host=os.getenv("SUPABASE_DB_HOST", "your-supabase-db-host.supabase.co"),
-        port=os.getenv("SUPABASE_DB_PORT", "5432"),
-        database=os.getenv("SUPABASE_DB_NAME", "postgres"),
-        user=os.getenv("SUPABASE_DB_USER", "postgres"),
-        password=os.getenv("SUPABASE_DB_PASSWORD", "your-password"),
-        sslmode="require"  # Supabase güvenlik için SSL gerektiriyor
-    )
+    host = os.getenv("SUPABASE_DB_HOST", "postgres")  # Default olarak yerel postgres container
+    port = os.getenv("SUPABASE_DB_PORT", "5432")
+    database = os.getenv("SUPABASE_DB_NAME", "postgres")
+    user = os.getenv("SUPABASE_DB_USER", "postgres")
+    password = os.getenv("SUPABASE_DB_PASSWORD", "postgres")
+    
+    print(f"Connecting to PostgreSQL: host={host}, port={port}, database={database}, user={user}")
+    
+    # Docker içinde postgres container'ına bağlanma
+    if host == "ahrhnlmeimlxttvujmpa.supabase.co":
+        print("Attempting to connect to Supabase...")
+        try:
+            return psycopg2.connect(
+                host=host,
+                port=port,
+                database=database,
+                user=user,
+                password=password,
+                sslmode="require"  # Supabase için SSL gerekli
+            )
+        except Exception as e:
+            print(f"Supabase connection failed: {e}")
+            print("Falling back to local PostgreSQL...")
+            # Yerel PostgreSQL'e fail-over
+            return psycopg2.connect(
+                host="postgres",
+                port="5432",
+                database="userdb",  # Docker-compose'daki postgres container'ının DB adı
+                user="postgres",
+                password="postgres"
+            )
+    else:
+        # Yerel PostgreSQL bağlantısı
+        return psycopg2.connect(
+            host=host,
+            port=port,
+            database=database,
+            user=user,
+            password=password
+        )
+
+# Supabase client'ı alır veya oluşturur
+def get_supabase_client() -> Optional[Client]:
+    global supabase_client
+    if supabase_client is None and SUPABASE_URL and SUPABASE_KEY:
+        try:
+            print(f"Initializing Supabase client with URL: {SUPABASE_URL}")
+            print(f"Supabase key (first 10 chars): {SUPABASE_KEY[:10]}...")
+            supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            print("Supabase client initialized successfully")
+            
+            # Test connection by querying a simple table
+            try:
+                test_response = supabase_client.table('users').select('count', count='exact').limit(1).execute()
+                print(f"Supabase connection test successful. Count: {test_response.count if hasattr(test_response, 'count') else 'unknown'}")
+            except Exception as test_err:
+                print(f"Supabase connection test failed: {test_err}")
+        except Exception as e:
+            print(f"Failed to initialize Supabase client: {e}")
+            import traceback
+            traceback.print_exc()
+    return supabase_client
+
+# Supabase veritabanı erişim fonksiyonları
+async def create_user_in_supabase(user_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Supabase REST API kullanarak kullanıcı oluşturur"""
+    client = get_supabase_client()
+    if not client:
+        print("Supabase client not available, skipping Supabase user creation")
+        return None
+    
+    try:
+        print(f"Creating user in Supabase: {user_data['email']}")
+        # Log user data without sensitive info
+        safe_data = {k: v for k, v in user_data.items() if k != 'firebase_uid'}
+        print(f"User data to insert: {safe_data}")
+        
+        # First check if the 'users' table exists
+        try:
+            table_query = client.table('users').select('count', count='exact').limit(1).execute()
+            print(f"'users' table exists with count: {table_query.count if hasattr(table_query, 'count') else 'unknown'}")
+        except Exception as table_err:
+            # Table might not exist
+            print(f"Error checking 'users' table: {table_err}")
+            print("Attempting to create the table...")
+            try:
+                # Try to create a minimal users table
+                # Note: This is a simplified approach, in production you'd use migrations
+                # This might not work if the user doesn't have appropriate permissions
+                # Also, this is not a standard Supabase API feature, just an example
+                print("Supabase API doesn't support table creation. Please create the table manually in Supabase dashboard.")
+                return None
+            except Exception as create_err:
+                print(f"Failed to create 'users' table: {create_err}")
+                return None
+        
+        # Now try to insert the user
+        response = client.table('users').insert(user_data).execute()
+        print(f"Supabase user creation response: {response}")
+        if hasattr(response, 'error') and response.error:
+            print(f"Supabase error: {response.error}")
+            return None
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"Error creating user in Supabase: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+async def get_user_from_supabase(filters: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Supabase REST API kullanarak kullanıcı bilgilerini getirir"""
+    client = get_supabase_client()
+    if not client:
+        print("Supabase client not available, skipping Supabase user lookup")
+        return None
+    
+    try:
+        print(f"Getting user from Supabase with filters: {filters}")
+        query = client.table('users').select('*')
+        
+        # Filtreleri ekle
+        for key, value in filters.items():
+            query = query.eq(key, value)
+        
+        response = query.execute()
+        print(f"Supabase user lookup response data count: {len(response.data)}")
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"Error getting user from Supabase: {e}")
+        return None
 
 # Create user table if not exists
 def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    # Önce şemayı oluştur
-    cursor.execute('CREATE SCHEMA IF NOT EXISTS user_schema')
-    
-    # Tabloyu şema ile birlikte oluştur
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_schema.users (
-            id VARCHAR(36) PRIMARY KEY,
-            email VARCHAR(255) UNIQUE NOT NULL,
-            firebase_uid VARCHAR(100) UNIQUE NOT NULL,
-            name VARCHAR(100),
-            surname VARCHAR(100),
-            role VARCHAR(50) DEFAULT 'user',
-            phone_number VARCHAR(20),
-            is_active BOOLEAN DEFAULT TRUE,
-            department_id VARCHAR(36),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    cursor.close()
-    conn.close()
+    # PostgreSQL tablosunu oluşturmak yerine sadece Supabase client'ı başlat
+    try:
+        # Supabase API'yi başlat
+        supabase_client = get_supabase_client()
+        if supabase_client:
+            print("Supabase client initialized successfully")
+        else:
+            print("WARNING: Supabase client initialization failed or credentials missing")
+    except Exception as e:
+        print(f"Error initializing Supabase client: {e}")
 
 # RabbitMQ connection settings
 RABBITMQ_URL = "amqp://user:password@rabbitmq:5672"
@@ -247,13 +360,10 @@ async def signup(user_data: SignUpSchema):
     department_id = getattr(user_data, 'department_id', None)
     
     try:
-        # Check if user already exists in PostgreSQL
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM user_schema.users WHERE email = %s", (email,))
-        existing_user = cursor.fetchone()
+        # Sadece Supabase üzerinden kullanıcı kontrolü
+        supabase_user = await get_user_from_supabase({"email": email})
         
-        if existing_user:
+        if supabase_user:
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -267,21 +377,36 @@ async def signup(user_data: SignUpSchema):
         user_id = str(uuid.uuid4())
         firebase_user = auth.create_user(uid=user_id, email=email, password=password)
         
-        # Save user in PostgreSQL with extended fields
-        cursor.execute(
-            """
-            INSERT INTO user_schema.users (id, email, firebase_uid, name, surname, role, phone_number, is_active, department_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (user_id, email, firebase_user.uid, name, surname, role, phone_number, True, department_id)
-        )
-        conn.commit()
+        # Kullanıcı verilerini hazırla
+        user_data_dict = {
+            "id": user_id,
+            "email": email,
+            "firebase_uid": firebase_user.uid,
+            "name": name,
+            "surname": surname,
+            "role": role,
+            "phone_number": phone_number,
+            "is_active": True,
+            "department_id": department_id
+        }
+        
+        # Kullanıcıyı Supabase'e kaydet
+        supabase_result = await create_user_in_supabase(user_data_dict)
+        supabase_saved = False
+        
+        if supabase_result:
+            print(f"User successfully saved to Supabase: {email}")
+            supabase_saved = True
+        else:
+            print(f"WARNING: Failed to save user to Supabase, continuing with Firebase only: {email}")
+            # Firebase'de kullanıcı oluşturuldu, ancak Supabase'e kaydedilemedi
+            # Bu noktada kullanıcıyı yine de oluşturmaya devam ediyoruz
         
         # Send domain event to RabbitMQ
         event = UserCreatedEvent.create(
             user_id=user_id,
             email=email,
-            metadata={"source": "user_service", "operation": "signup"}
+            metadata={"source": "user_service", "operation": "signup", "supabase_saved": supabase_saved}
         )
         await send_message_to_rabbitmq(event, "user")
         
@@ -292,7 +417,9 @@ async def signup(user_data: SignUpSchema):
             "user_id": user_id,
             "email": email,
             "name": name,
-            "surname": surname
+            "surname": surname,
+            "supabase_saved": supabase_saved,
+            "warning": None if supabase_saved else "User created in Firebase but not saved to Supabase database"
         }, status_code=201)
     
     except auth.EmailAlreadyExistsError:
@@ -308,9 +435,6 @@ async def signup(user_data: SignUpSchema):
             "code": 500,
             "message": f"Internal Server Error: {str(e)}"
         })
-    finally:
-        cursor.close()
-        conn.close()
 
 @app.post("/auth/login")
 async def login(user_data: LoginSchema):
@@ -324,40 +448,50 @@ async def login(user_data: LoginSchema):
         # Create custom token
         custom_token = auth.create_custom_token(firebase_user.uid)
         
-        # Veritabanından kullanıcı bilgilerini al
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        cursor.execute("""
-            SELECT id, email, name, surname, role, is_active, department_id
-            FROM user_schema.users
-            WHERE firebase_uid = %s
-        """, (firebase_user.uid,))
-        user_db = cursor.fetchone()
+        # Supabase'den kullanıcı bilgilerini al
+        user_db = await get_user_from_supabase({"firebase_uid": firebase_user.uid})
+        supabase_available = True
         
         if not user_db:
-            # Kullanıcı Firebase'de var ama veritabanında yoksa, ekleyelim
-            user_id = str(uuid.uuid4())
-            cursor.execute("""
-                INSERT INTO user_schema.users (id, email, firebase_uid, name, surname, role, is_active)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, email, name, surname, role, is_active
-            """, (user_id, email, firebase_user.uid, '', '', 'user', True))
-            conn.commit()
-            user_db = cursor.fetchone()
+            # Kullanıcı Firebase'de var ama Supabase'de yoksa
+            print(f"User exists in Firebase but not in Supabase: {email}")
+            supabase_available = False
+            
+            # Kullanıcı bilgilerini Firebase'den al
+            user_id = firebase_user.uid
+            user_db = {
+                "id": user_id,
+                "email": email,
+                "firebase_uid": firebase_user.uid,
+                "name": email.split("@")[0],  # Basit bir varsayılan ad
+                "surname": "",
+                "role": "user",
+                "is_active": True,
+                "department_id": None
+            }
+            
+            # Gelecekte Supabase'e kaydetmeyi dene
+            user_data_dict = user_db.copy()
+            supabase_result = await create_user_in_supabase(user_data_dict)
+            if supabase_result:
+                print(f"User successfully synced to Supabase during login: {email}")
+                user_db = supabase_result
+                supabase_available = True
+            else:
+                print(f"WARNING: Failed to sync user to Supabase during login: {email}")
         
         # Role değerini doğru alma
         user_role = 'user'  # Varsayılan değer
         if user_db and user_db.get('role') is not None and user_db.get('role') != '':
             user_role = user_db.get('role')
             
-        print(f"LOGIN - User role from DB: '{user_role}', Raw value: '{user_db.get('role')}'")
+        print(f"LOGIN - User role: '{user_role}', Raw value: '{user_db.get('role')}'")
         
         # Send domain event to RabbitMQ
         event = UserLoggedInEvent.create(
             user_id=firebase_user.uid,
             email=email,
-            metadata={"source": "user_service", "operation": "login"}
+            metadata={"source": "user_service", "operation": "login", "supabase_available": supabase_available}
         )
         await send_message_to_rabbitmq(event, "user")
         
@@ -370,9 +504,11 @@ async def login(user_data: LoginSchema):
             "name": user_db['name'] or email.split('@')[0],
             "surname": user_db['surname'] or "",
             "email": email,
-            "role": user_role,  # Düzeltilmiş role
-            "department_id": user_db.get('department_id'),  # Sadece department_id dönüyoruz
-            "is_active": user_db['is_active']
+            "role": user_role,
+            "department_id": user_db.get('department_id'),
+            "is_active": user_db['is_active'],
+            "supabase_available": supabase_available,
+            "warning": None if supabase_available else "User exists in Firebase but not in Supabase, using fallback data"
         })
     except Exception as e:
         print(f"Login error: {str(e)}")
@@ -384,11 +520,6 @@ async def login(user_data: LoginSchema):
                 "error_description": str(e)
             }
         })
-    finally:
-        if 'cursor' in locals() and cursor:
-            cursor.close()
-        if 'conn' in locals() and conn:
-            conn.close()
 
 # Yeni eklenen profil endpoint'i
 @app.get("/users/profile")
@@ -402,6 +533,7 @@ async def get_profile(authorization: str = Header(None)):
     
     token = authorization.replace("Bearer ", "")
     user_id = None
+    firebase_data = None
     
     try:
         # Önce token'ı decode etmeyi deneyelim - custom token olabilir
@@ -444,18 +576,50 @@ async def get_profile(authorization: str = Header(None)):
                 "message": "Invalid token. Could not extract user ID."
             })
         
-        # Veritabanındaki kullanıcı bilgilerini al
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        # Firebase'den kullanıcı bilgilerini alalım (fallback için)
+        try:
+            firebase_data = auth.get_user(user_id)
+            print(f"Got Firebase user data for {user_id}: {firebase_data.email}")
+        except Exception as fb_err:
+            print(f"Error getting Firebase data: {fb_err}")
         
-        # Kullanıcının veritabanındaki bilgilerini al, firebase_uid ile eşleşen kullanıcıyı bul
-        cursor.execute("""
-            SELECT id, email, name, surname, role, phone_number, is_active, department_id 
-            FROM user_schema.users 
-            WHERE firebase_uid = %s OR id = %s
-        """, (user_id, user_id))
-        user_data = cursor.fetchone()
+        # Supabase'den kullanıcı bilgilerini al
+        user_data = await get_user_from_supabase({"firebase_uid": user_id})
         
+        # Kullanıcı bulunamazsa id ile tekrar deneyelim
+        if not user_data:
+            user_data = await get_user_from_supabase({"id": user_id})
+        
+        supabase_available = True
+        
+        # Kullanıcı Supabase'de bulunamazsa, Firebase bilgilerini kullan
+        if not user_data and firebase_data:
+            print(f"User not found in Supabase, using Firebase data: {firebase_data.email}")
+            supabase_available = False
+            
+            # Firebase verilerinden bir kullanıcı profili oluştur
+            user_data = {
+                "id": user_id,
+                "email": firebase_data.email,
+                "firebase_uid": user_id,
+                "name": firebase_data.display_name or firebase_data.email.split('@')[0],
+                "surname": "",
+                "role": "user",
+                "phone_number": firebase_data.phone_number or "",
+                "is_active": not firebase_data.disabled,
+                "department_id": None
+            }
+            
+            # Gelecekte Supabase'e kaydetmeyi dene
+            supabase_result = await create_user_in_supabase(user_data)
+            if supabase_result:
+                print(f"User successfully synced to Supabase during profile request: {firebase_data.email}")
+                user_data = supabase_result
+                supabase_available = True
+            else:
+                print(f"WARNING: Failed to sync user to Supabase during profile request: {firebase_data.email}")
+        
+        # Hiçbir şekilde kullanıcı bulunamazsa 404 hatası ver
         if not user_data:
             print(f"No user found with firebase_uid or id = {user_id}")
             raise HTTPException(status_code=404, detail={
@@ -469,7 +633,7 @@ async def get_profile(authorization: str = Header(None)):
         if user_data and user_data.get('role') is not None and user_data.get('role') != '':
             user_role = user_data.get('role')
             
-        print(f"PROFILE - User role from DB: '{user_role}', Raw value: '{user_data.get('role')}'")
+        print(f"PROFILE - User role: '{user_role}', Raw value: '{user_data.get('role')}'")
         
         # Profil bilgilerini döndür
         return JSONResponse(content={
@@ -479,10 +643,12 @@ async def get_profile(authorization: str = Header(None)):
             "name": user_data['name'] or user_data['email'].split('@')[0],
             "surname": user_data['surname'] or "",
             "email": user_data['email'],
-            "role": user_role,  # Düzeltilmiş role
-            "phone_number": user_data['phone_number'] or "",
+            "role": user_role,
+            "phone_number": user_data.get('phone_number') or "",
             "is_active": user_data['is_active'],
-            "department_id": user_data.get('department_id')  # Sadece department_id dönüyoruz
+            "department_id": user_data.get('department_id'),
+            "supabase_available": supabase_available,
+            "warning": None if supabase_available else "User profile from Firebase, not found in Supabase"
         })
         
     except Exception as e:
@@ -495,11 +661,6 @@ async def get_profile(authorization: str = Header(None)):
                 "error_description": str(e)
             }
         })
-    finally:
-        if 'cursor' in locals() and cursor:
-            cursor.close()
-        if 'conn' in locals() and conn:
-            conn.close()
 
 if __name__ == "__main__":
     import uvicorn

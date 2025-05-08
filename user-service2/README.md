@@ -153,3 +153,27 @@ This will start:
 - Passwords are securely handled using Firebase Authentication
 - User data is stored in PostgreSQL database
 - RabbitMQ credentials are configured via environment variables 
+
+## Supabase Entegrasyonu
+
+Bu servis, veritabanı olarak Supabase PostgreSQL kullanacak şekilde yapılandırılabilir.
+
+### Supabase Konfigürasyonu
+
+1. Supabase'de bir proje oluşturun
+2. Supabase proje ayarlarından PostgreSQL bağlantı bilgilerini alın
+3. Aşağıdaki çevre değişkenlerini ayarlayın:
+
+```
+SUPABASE_DB_HOST=your-supabase-db-host.supabase.co
+SUPABASE_DB_PORT=5432
+SUPABASE_DB_NAME=postgres
+SUPABASE_DB_USER=postgres
+SUPABASE_DB_PASSWORD=your-password
+```
+
+### Tablolar ve Şema
+
+User servisi `user_schema` adlı bir şema kullanır ve tablolar bu şema içinde oluşturulur:
+
+- `user_schema.users`: Kullanıcı bilgilerini tutar 

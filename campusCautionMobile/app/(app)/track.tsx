@@ -1,32 +1,67 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Platform
+  Platform,
+  ActivityIndicator,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Issue, mockIssues } from '../../data/mockData';
+import { getUserIssues } from '../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../contexts/AuthContext';
 
-// Get only the current user's issues
-const getUserIssues = () => {
-  return mockIssues.filter(issue => issue.isUserIssue === true);
-};
+// Define Issue type based on backend response structure
+interface Issue {
+  id: string;
+  title: string;
+  description: string;
+  status: string; // Make this more flexible to accept any string
+  departmentId?: number; // Make optional since it might not always be present
+  createdAt?: string; // Make optional
+  updatedAt?: string; // Make optional
+  date?: string; // Add alternative date field that might be used
+  latitude?: number;
+  longitude?: number;
+  photoUrl?: string;
+  [key: string]: any; // Add index signature to accept any other fields
+}
 
-const getStatusColor = (status: Issue['status']) => {
-  switch (status) {
+const TOKEN_KEY = 'auth_token';
+
+const getStatusColor = (status: string) => {
+  // Convert to lowercase for case-insensitive comparison
+  const statusLower = status?.toLowerCase() || '';
+  
+  switch (statusLower) {
     case 'completed':
+    case 'done':
+    case 'resolved':
+    case 'fixed':
       return '#16a34a';
     case 'in_progress':
+    case 'inprogress':
+    case 'in progress':
+    case 'processing':
+    case 'working':
       return '#eab308';
     case 'received':
+    case 'open':
+    case 'new':
+    case 'pending':
+    case 'submitted':
       return '#2563eb';
     case 'rejected':
+    case 'closed':
+    case 'denied':
+    case 'cancelled':
       return '#dc2626';
     default:
+      console.log('Unknown status:', status);
       return '#4b5563';
   }
 };
@@ -46,28 +81,56 @@ const getStatusIcon = (status: Issue['status']) => {
   }
 };
 
-const getStatusLabel = (status: Issue['status']) => {
-  switch (status) {
+const getStatusLabel = (status: string) => {
+  // Convert to lowercase for case-insensitive comparison
+  const statusLower = status?.toLowerCase() || '';
+  
+  switch (statusLower) {
     case 'completed':
+    case 'done':
+    case 'resolved':
+    case 'fixed':
       return 'Completed';
     case 'in_progress':
+    case 'inprogress':
+    case 'in progress':
+    case 'processing':
+    case 'working':
       return 'In Progress';
     case 'received':
+    case 'open':
+    case 'new':
+    case 'pending':
+    case 'submitted':
       return 'Pending';
     case 'rejected':
+    case 'closed':
+    case 'denied':
+    case 'cancelled':
       return 'Rejected';
     default:
-      return 'Unknown';
+      return status || 'Unknown';
   }
 };
 
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+const formatDate = (dateString?: string) => {
+  if (!dateString) return 'Unknown date';
+  
+  try {
+    const date = new Date(dateString);
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return dateString; // Return original string if not a valid date
+    }
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return dateString; // Return original string if parsing fails
+  }
 };
 
 // Helper function for status-based gradient colors for the title background
@@ -86,9 +149,109 @@ const getStatusGradientColors = (status: Issue['status']): [string, string] => {
   }
 };
 
+// Function to log issue data structure for debugging
+const logIssueStructure = (issues: any[]) => {
+  if (!issues || issues.length === 0) {
+    console.log('No issues to analyze structure');
+    return;
+  }
+  
+  // Log the first issue's keys
+  const firstIssue = issues[0];
+  console.log('Issue structure - keys:', Object.keys(firstIssue));
+  
+  // Log status values to ensure we handle them correctly
+  const statusValues = issues.map(issue => issue.status);
+  console.log('Status values found:', [...new Set(statusValues)]);
+};
+
 export default function TrackScreen() {
   const router = useRouter();
-  const userIssues = getUserIssues();
+  const { token } = useAuth();
+  const [userIssues, setUserIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const fetchUserIssues = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Get token from context or AsyncStorage
+      let authToken = token;
+      
+      if (!authToken) {
+        console.log('Token not found in context, trying AsyncStorage');
+        authToken = await AsyncStorage.getItem(TOKEN_KEY);
+      }
+      
+      if (!authToken) {
+        console.log('No authentication token found');
+        setError('Authentication token not found');
+        setLoading(false);
+        return;
+      }
+      
+      // Log token structure for debugging
+      if (authToken && authToken.split('.').length === 3) {
+        try {
+          // Decode JWT token payload
+          const base64Payload = authToken.split('.')[1];
+          const payload = JSON.parse(atob(base64Payload));
+          console.log('Token structure in track.tsx:', 
+            JSON.stringify({
+              uid: payload.uid,
+              sub: payload.sub,
+              user_id: payload.user_id,
+              exp: payload.exp,
+              iat: payload.iat
+            })
+          );
+        } catch (e) {
+          console.error('Error parsing token in track.tsx:', e);
+        }
+      }
+      
+      console.log('Fetching user issues with token length:', authToken ? authToken.length : 0);
+      
+      // Fetch user issues from API
+      const issues = await getUserIssues(authToken);
+      console.log('User issues fetched successfully:', issues ? issues.length : 0, 'issues found');
+      
+      // Log issue structure for debugging
+      if (Array.isArray(issues) && issues.length > 0) {
+        logIssueStructure(issues);
+      } else {
+        console.log('No issues returned from API - this could be normal if user has no issues');
+      }
+      
+      // Check if issues is valid before setting state
+      if (Array.isArray(issues)) {
+        setUserIssues(issues);
+      } else {
+        console.log('API did not return an array, setting empty array');
+        setUserIssues([]);
+      }
+    } catch (err) {
+      console.error('Error fetching user issues:', err);
+      setError('Failed to load your reports. Please try again later.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+  
+  // Fetch user issues on component mount
+  useEffect(() => {
+    fetchUserIssues();
+  }, []);
+  
+  // Handle pull-to-refresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchUserIssues();
+  };
   
   const navigateToIssueDetail = (reportId: string) => {
     router.push(`/issue-detail?id=${reportId}`);
@@ -102,9 +265,33 @@ export default function TrackScreen() {
         </Text>
       </View>
       
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
+        }
+      >
         <View style={styles.content}>
-          {userIssues.length === 0 ? (
+          {loading && !refreshing ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#1d4ed8" />
+              <Text style={styles.loadingText}>Loading your reports...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={40} color="#dc2626" style={styles.errorIcon} />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity 
+                style={styles.retryButton}
+                onPress={fetchUserIssues}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : userIssues.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="clipboard" size={40} color="#9ca3af" style={styles.emptyIcon} />
               <Text style={styles.emptyText}>
@@ -115,7 +302,7 @@ export default function TrackScreen() {
             userIssues.map((report) => (
               <View key={report.id} style={styles.reportContainer}>
                 <Text style={styles.dateText}>
-                  {formatDate(report.date)}
+                  {formatDate(report.createdAt || report.date)}
                 </Text>
                 <View style={styles.divider} />
                 <TouchableOpacity
@@ -153,7 +340,7 @@ export default function TrackScreen() {
                         { backgroundColor: `${getStatusColor(report.status)}20` }
                       ]}>
                         <Ionicons 
-                          name={getStatusIcon(report.status) as any} 
+                          name={getStatusIcon(report.status as any) as any} 
                           size={14} 
                           color={getStatusColor(report.status)} 
                           style={styles.statusIcon} 
@@ -195,6 +382,39 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+  },
+  loadingContainer: {
+    paddingVertical: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#6b7280',
+    fontSize: 16,
+  },
+  errorContainer: {
+    paddingVertical: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorIcon: {
+    marginBottom: 12,
+  },
+  errorText: {
+    color: '#dc2626',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#1d4ed8',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 4,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontWeight: '500',
   },
   emptyContainer: {
     paddingVertical: 64,

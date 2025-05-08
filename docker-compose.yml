@@ -14,6 +14,7 @@ services:
     restart: always
     depends_on:
       - user-service
+      - issue-service
       - postgres
       - rabbitmq
 
@@ -27,9 +28,41 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/userdb
+      # Supabase bağlantı bilgileri (örnek değerler, kendi bilgilerinizle değiştirin)
+      - SUPABASE_DB_HOST=ahrhnlmeimlxttvujmpa.supabase.co
+      - SUPABASE_DB_PORT=5432
+      - SUPABASE_DB_NAME=postgres  # Supabase'in varsayılan DB adı "postgres"
+      - SUPABASE_DB_USER=postgres
+      - SUPABASE_DB_PASSWORD=Qfnr9GtwhCrlVOK3
+      # Supabase HTTP API için gerekli anahtarlar
+      - SUPABASE_URL=https://ahrhnlmeimlxttvujmpa.supabase.co
+      - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFocmhubG1laW1seHR0dnVqbXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MDcxMjIsImV4cCI6MjA2MjI4MzEyMn0.6jJ1IxliIFw4zjBL5BO0Mycdrxnu1LyTLNuf_MKckio
     volumes:
       - ./user-service2:/app
+    networks:
+      - microservice-network
+
+  issue-service:
+    build: ./IssueService
+    ports:
+      - "5003:8080"
+    depends_on:
+      - rabbitmq
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - MongoDB__ConnectionString=mongodb://mongodb:27017
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=user
+      - RabbitMQ__Password=password
+    networks:
+      - microservice-network
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
     networks:
       - microservice-network
 
@@ -68,6 +101,7 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  mongodb_data:
 
 networks:
   microservice-network:

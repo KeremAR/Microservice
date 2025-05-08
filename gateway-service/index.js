@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
 const morgan = require('morgan');
+const http = require('http');
 
 // Load environment variables based on NODE_ENV
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -58,15 +59,11 @@ const logProvider = (provider) => {
   };
 };
 
-// Proxy middleware options
-const options = {
+// Proxy routes with URLs from environment variables
+app.use('/user', createProxyMiddleware({
+  target: USER_SERVICE_URL,
   changeOrigin: true,
-  pathRewrite: {
-    '^/user': '/',
-    '^/department': '/',
-    '^/issue': '/',
-    '^/notification': '/'
-  },
+  pathRewrite: { '^/user': '' },
   logLevel: 'debug',
   logProvider,
   onProxyReq: (proxyReq, req, res) => {
@@ -75,27 +72,50 @@ const options = {
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
   }
-};
-
-// Proxy routes with URLs from environment variables
-app.use('/user', createProxyMiddleware({
-  ...options,
-  target: USER_SERVICE_URL
 }));
 
 app.use('/department', createProxyMiddleware({
-  ...options,
-  target: DEPARTMENT_SERVICE_URL
+  target: DEPARTMENT_SERVICE_URL,
+  changeOrigin: true,
+  pathRewrite: { '^/department': '' },
+  logLevel: 'debug',
+  logProvider,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
+  }
 }));
 
 app.use('/issue', createProxyMiddleware({
-  ...options,
-  target: ISSUE_SERVICE_URL
+  target: ISSUE_SERVICE_URL,
+  changeOrigin: true,
+  pathRewrite: { '^/issue': '' },
+  logLevel: 'debug',
+  logProvider,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+    console.log(`[Gateway] Request headers:`, req.headers);
+    console.log(`[Gateway] ProxyReq path: ${proxyReq.path}`);
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
+  }
 }));
 
 app.use('/notification', createProxyMiddleware({
-  ...options,
-  target: NOTIFICATION_SERVICE_URL
+  target: NOTIFICATION_SERVICE_URL,
+  changeOrigin: true,
+  pathRewrite: { '^/notification': '' },
+  logLevel: 'debug',
+  logProvider,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
+  }
 }));
 
 // Home route

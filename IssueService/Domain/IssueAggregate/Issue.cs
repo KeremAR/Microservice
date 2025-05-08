@@ -1,5 +1,8 @@
 using IssueService.Domain.Common;
 using IssueService.Domain.IssueAggregate.Events;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using System.Text.Json.Serialization; // Varsayılan olarak System.Text.Json kabul edildi
 
 namespace IssueService.Domain.IssueAggregate;
 
@@ -15,6 +18,10 @@ public class Issue : BaseEntity
     public double Longitude { get; private set; }
     public IssueStatus Status { get; private set; } = IssueStatus.Pending;
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
+
+    [BsonIgnore] // Bu alan MongoDB'ye kaydedilmeyecek
+    [JsonPropertyName("hexId")] // JSON'da "hexId" olarak görünecek
+    public string HexId => Id.ToString(); // ObjectId'yi string'e çevirir
 
     private Issue() { } // Mongo için boş ctor
 
@@ -38,4 +45,9 @@ public class Issue : BaseEntity
         Status = IssueStatus.Resolved;
         AddEvent(new IssueStatusChangedEvent(Id.ToString(), Status.ToString()));
     }
+
+    // Mevcut Id özelliği (BaseEntity'den geliyor) ObjectId tipinde.
+    // JSON yanıtında hem mevcut "id" nesnesini (ObjectId'nin detaylı yapısı) hem de "hexId" string'ini istiyoruz.
+    // ObjectId'nin varsayılan serileşmesi (detaylı nesne) BaseEntity'deki Id özelliği üzerinden olacaktır.
+    // Eklediğimiz HexId ise bunun string halini sunacak.
 }

@@ -36,14 +36,29 @@ if not firebase_admin._apps:
 
 # PostgreSQL connection
 def get_db_connection():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+    # Eski bağlantı
+    # return psycopg2.connect(os.getenv("DATABASE_URL"))
+    
+    # Supabase PostgreSQL bağlantısı
+    return psycopg2.connect(
+        host=os.getenv("SUPABASE_DB_HOST", "your-supabase-db-host.supabase.co"),
+        port=os.getenv("SUPABASE_DB_PORT", "5432"),
+        database=os.getenv("SUPABASE_DB_NAME", "postgres"),
+        user=os.getenv("SUPABASE_DB_USER", "postgres"),
+        password=os.getenv("SUPABASE_DB_PASSWORD", "your-password"),
+        sslmode="require"  # Supabase güvenlik için SSL gerektiriyor
+    )
 
 # Create user table if not exists
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
+    # Önce şemayı oluştur
+    cursor.execute('CREATE SCHEMA IF NOT EXISTS user_schema')
+    
+    # Tabloyu şema ile birlikte oluştur
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS user_schema.users (
             id VARCHAR(36) PRIMARY KEY,
             email VARCHAR(255) UNIQUE NOT NULL,
             firebase_uid VARCHAR(100) UNIQUE NOT NULL,
@@ -235,7 +250,7 @@ async def signup(user_data: SignUpSchema):
         # Check if user already exists in PostgreSQL
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT * FROM user_schema.users WHERE email = %s", (email,))
         existing_user = cursor.fetchone()
         
         if existing_user:
@@ -255,7 +270,7 @@ async def signup(user_data: SignUpSchema):
         # Save user in PostgreSQL with extended fields
         cursor.execute(
             """
-            INSERT INTO users (id, email, firebase_uid, name, surname, role, phone_number, is_active, department_id)
+            INSERT INTO user_schema.users (id, email, firebase_uid, name, surname, role, phone_number, is_active, department_id)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (user_id, email, firebase_user.uid, name, surname, role, phone_number, True, department_id)
@@ -315,7 +330,7 @@ async def login(user_data: LoginSchema):
         
         cursor.execute("""
             SELECT id, email, name, surname, role, is_active, department_id
-            FROM users
+            FROM user_schema.users
             WHERE firebase_uid = %s
         """, (firebase_user.uid,))
         user_db = cursor.fetchone()
@@ -324,7 +339,7 @@ async def login(user_data: LoginSchema):
             # Kullanıcı Firebase'de var ama veritabanında yoksa, ekleyelim
             user_id = str(uuid.uuid4())
             cursor.execute("""
-                INSERT INTO users (id, email, firebase_uid, name, surname, role, is_active)
+                INSERT INTO user_schema.users (id, email, firebase_uid, name, surname, role, is_active)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, email, name, surname, role, is_active
             """, (user_id, email, firebase_user.uid, '', '', 'user', True))
@@ -436,7 +451,7 @@ async def get_profile(authorization: str = Header(None)):
         # Kullanıcının veritabanındaki bilgilerini al, firebase_uid ile eşleşen kullanıcıyı bul
         cursor.execute("""
             SELECT id, email, name, surname, role, phone_number, is_active, department_id 
-            FROM users 
+            FROM user_schema.users 
             WHERE firebase_uid = %s OR id = %s
         """, (user_id, user_id))
         user_data = cursor.fetchone()

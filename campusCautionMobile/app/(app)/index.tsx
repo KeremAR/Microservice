@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Link, useRouter } from 'expo-router';
+import { Link, useRouter, useFocusEffect } from 'expo-router';
 import { mockIssues, mockNotifications, mockStats, campusMapRegion } from '../../data/mockData';
 import OSMMap from '../../components/OSMMap';
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,7 +30,8 @@ interface UserProfile {
 
 // Issue interface
 interface Issue {
-  id: string;
+  id: any; // Original MongoDB ObjectId (as object)
+  hexId: string; // Hexadecimal string representation of ObjectId
   title: string;
   description: string;
   status: string;
@@ -169,8 +170,18 @@ export default function HomeScreen() {
   // Fetch profile and issues when component mounts
   useEffect(() => {
     fetchUserProfile();
-    fetchAllIssues();
   }, [token, user]);
+  
+  // Use useFocusEffect to refresh issues every time the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Home screen is focused, refreshing issues...');
+      fetchAllIssues();
+      return () => {
+        // Optional cleanup
+      };
+    }, [token])
+  );
   
   // Run animations when component mounts
   useEffect(() => {
@@ -196,7 +207,7 @@ export default function HomeScreen() {
   const mapMarkers = allIssues
     .filter(issue => issue.status !== 'Completed' && issue.latitude && issue.longitude) 
     .map(issue => ({
-      id: issue.id,
+      id: issue.hexId, // Use hexId instead of id
       coordinates: {
         latitude: issue.latitude || 0,
         longitude: issue.longitude || 0,
@@ -256,7 +267,12 @@ export default function HomeScreen() {
             markers={mapMarkers}
             onMarkerPress={(marker) => {
               // Navigate to detail page for all issues
-              navigateToIssueDetail(marker.id);
+              if (marker && marker.id) {
+                console.log('Navigating to issue detail with ID:', marker.id);
+                navigateToIssueDetail(marker.id);
+              } else {
+                console.error('Invalid marker or marker ID:', marker);
+              }
             }}
           />
         )}

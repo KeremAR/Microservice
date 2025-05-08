@@ -126,7 +126,7 @@ const OSMMap: React.FC<OSMMapProps> = ({
         .on('click', function() {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'markerClick',
-            marker: ${JSON.stringify(marker)}
+            markerId: "${marker.id}"
           }));
         });
       `;
@@ -270,7 +270,27 @@ const OSMMap: React.FC<OSMMapProps> = ({
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'markerClick' && onMarkerPress) {
-        onMarkerPress(data.marker);
+        // Find marker by ID and call onMarkerPress with the full marker object
+        const markerId = data.markerId;
+        console.log('Marker clicked with ID:', markerId);
+        
+        if (markerId) {
+          // Look for the marker in our markers array
+          const marker = markers.find(m => m.id === markerId);
+          if (marker) {
+            onMarkerPress(marker);
+          } else {
+            // If marker not found, create minimal compliant object
+            onMarkerPress({
+              id: markerId,
+              coordinates: {
+                latitude: 0,
+                longitude: 0
+              },
+              title: 'Unknown'
+            });
+          }
+        }
       }
     } catch (error) {
       console.error('Error parsing WebView message:', error);

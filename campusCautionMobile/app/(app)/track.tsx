@@ -17,10 +17,11 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // Define Issue type based on backend response structure
 interface Issue {
-  id: string;
+  id: any; // Original MongoDB ObjectId (as object)
+  hexId: string; // Hexadecimal string representation of ObjectId
   title: string;
   description: string;
-  status: string; // Make this more flexible to accept any string
+  status?: string; // Make status optional since it might be undefined
   departmentId?: number; // Make optional since it might not always be present
   createdAt?: string; // Make optional
   updatedAt?: string; // Make optional
@@ -33,9 +34,12 @@ interface Issue {
 
 const TOKEN_KEY = 'auth_token';
 
-const getStatusColor = (status: string) => {
+const getStatusColor = (status: string | undefined) => {
+  // Handle undefined or null status
+  if (!status) return '#4b5563'; // Default gray color
+  
   // Convert to lowercase for case-insensitive comparison
-  const statusLower = status?.toLowerCase() || '';
+  const statusLower = status.toLowerCase();
   
   switch (statusLower) {
     case 'completed':
@@ -66,7 +70,9 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getStatusIcon = (status: Issue['status']) => {
+const getStatusIcon = (status: Issue['status'] | undefined) => {
+  if (!status) return 'alert-circle'; // Default icon for undefined status
+  
   switch (status) {
     case 'completed':
       return 'checkmark-circle';
@@ -81,9 +87,12 @@ const getStatusIcon = (status: Issue['status']) => {
   }
 };
 
-const getStatusLabel = (status: string) => {
+const getStatusLabel = (status: string | undefined) => {
+  // Handle undefined or null status
+  if (!status) return 'Unknown';
+  
   // Convert to lowercase for case-insensitive comparison
-  const statusLower = status?.toLowerCase() || '';
+  const statusLower = status.toLowerCase();
   
   switch (statusLower) {
     case 'completed':
@@ -109,7 +118,7 @@ const getStatusLabel = (status: string) => {
     case 'cancelled':
       return 'Rejected';
     default:
-      return status || 'Unknown';
+      return status;
   }
 };
 
@@ -134,7 +143,9 @@ const formatDate = (dateString?: string) => {
 };
 
 // Helper function for status-based gradient colors for the title background
-const getStatusGradientColors = (status: Issue['status']): [string, string] => {
+const getStatusGradientColors = (status: Issue['status'] | undefined): [string, string] => {
+  if (!status) return ['$gray600', '$gray500']; // Default for undefined status
+  
   switch (status) {
     case 'completed':
       return ['$green600', '$green500']; // Green gradient for completed
@@ -299,14 +310,14 @@ export default function TrackScreen() {
               </Text>
             </View>
           ) : (
-            userIssues.map((report) => (
-              <View key={report.id} style={styles.reportContainer}>
+            userIssues.map((report, index) => (
+              <View key={`${report.hexId}-${index}`} style={styles.reportContainer}>
                 <Text style={styles.dateText}>
                   {formatDate(report.createdAt || report.date)}
                 </Text>
                 <View style={styles.divider} />
                 <TouchableOpacity
-                  onPress={() => navigateToIssueDetail(report.id)}
+                  onPress={() => navigateToIssueDetail(report.hexId)}
                   style={styles.reportCard}
                 >
                   {/* Top part: Background based on status */}
@@ -340,7 +351,7 @@ export default function TrackScreen() {
                         { backgroundColor: `${getStatusColor(report.status)}20` }
                       ]}>
                         <Ionicons 
-                          name={getStatusIcon(report.status as any) as any} 
+                          name={getStatusIcon(report.status) as any} 
                           size={14} 
                           color={getStatusColor(report.status)} 
                           style={styles.statusIcon} 

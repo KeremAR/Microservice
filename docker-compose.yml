@@ -14,6 +14,7 @@ services:
     restart: always
     depends_on:
       - user-service
+      - issue-service
       - postgres
       - rabbitmq
 
@@ -30,6 +31,30 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/userdb
     volumes:
       - ./user-service2:/app
+    networks:
+      - microservice-network
+
+  issue-service:
+    build: ./IssueService
+    ports:
+      - "5003:8080"
+    depends_on:
+      - rabbitmq
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - MongoDB__ConnectionString=mongodb://mongodb:27017
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=user
+      - RabbitMQ__Password=password
+    networks:
+      - microservice-network
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
     networks:
       - microservice-network
 
@@ -68,6 +93,7 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  mongodb_data:
 
 networks:
   microservice-network:

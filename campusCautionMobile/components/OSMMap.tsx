@@ -71,7 +71,7 @@ const mapOptions = {
 
 // Style options
 const boundaryOptions = {
-  // color: "#2563eb",
+  color: "#2563eb",
   weight: 2,
   fillOpacity: 0
 };
@@ -91,8 +91,27 @@ const OSMMap: React.FC<OSMMapProps> = ({
 }) => {
   const webViewRef = useRef<WebView>(null);
 
+  // Check if initialRegion has valid coordinates
+  const hasValidCoordinates = initialRegion && 
+    initialRegion.latitude !== 0 && 
+    initialRegion.longitude !== 0;
+
+  // Default to campus center if no valid coordinates
+  const mapCenter = hasValidCoordinates 
+    ? [initialRegion.latitude, initialRegion.longitude] 
+    : [36.8945, 30.6520]; // Default to campus center
+  
+  const zoomLevel = hasValidCoordinates ? 16 : 14; // Zoom in more if we have specific coordinates
+
   const generateMarkers = () => {
-    return markers.map(marker => {
+    // Filter out markers with invalid coordinates
+    const validMarkers = markers.filter(marker => 
+      marker.coordinates && 
+      marker.coordinates.latitude !== 0 && 
+      marker.coordinates.longitude !== 0
+    );
+    
+    return validMarkers.map(marker => {
       const color = marker.color || 'blue';
       return `
         L.marker([${marker.coordinates.latitude}, ${marker.coordinates.longitude}], {
@@ -182,7 +201,7 @@ const OSMMap: React.FC<OSMMapProps> = ({
           bounceAtZoomLimits: false,
           touchZoom: true,
           doubleClickZoom: true
-        }).setView([36.8945, 30.65192], 14);
+        }).setView([${mapCenter[0]}, ${mapCenter[1]}], ${zoomLevel});
         
         // Set max bounds
         map.setMaxBounds([

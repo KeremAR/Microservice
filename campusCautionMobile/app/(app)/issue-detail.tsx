@@ -28,7 +28,8 @@ interface Coordinates {
 }
 
 interface IssueDetail {
-  id: string;
+  id: any; // Original MongoDB ObjectId (as object)
+  hexId: string; // Hexadecimal string representation 
   title: string;
   description: string;
   status: string;
@@ -54,6 +55,7 @@ export default function IssueDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const issueId = params.id as string;
+  
   const windowHeight = Dimensions.get('window').height;
   const mapHeight = windowHeight * 0.5;
   
@@ -153,8 +155,11 @@ export default function IssueDetailScreen() {
   };
 
   // Get status color
-  const getStatusColor = (status: string) => {
-    const statusLower = status?.toLowerCase() || '';
+  const getStatusColor = (status: string | undefined) => {
+    // Handle undefined or null status
+    if (!status) return '#4b5563'; // Default gray color
+    
+    const statusLower = status.toLowerCase();
     
     switch (statusLower) {
       case 'completed':
@@ -185,8 +190,11 @@ export default function IssueDetailScreen() {
   };
   
   // Get status label
-  const getStatusLabel = (status: string) => {
-    const statusLower = status?.toLowerCase() || '';
+  const getStatusLabel = (status: string | undefined) => {
+    // Handle undefined or null status
+    if (!status) return 'Unknown';
+    
+    const statusLower = status.toLowerCase();
     
     switch (statusLower) {
       case 'completed':
@@ -212,7 +220,7 @@ export default function IssueDetailScreen() {
       case 'cancelled':
         return 'Rejected';
       default:
-        return status || 'Unknown';
+        return status;
     }
   };
   
@@ -229,8 +237,11 @@ export default function IssueDetailScreen() {
       message: 'Your issue has been received and is being reviewed.'
     });
     
+    // Safely handle status - if status is undefined, assume it's "received" only
+    const statusLower = issue.status ? issue.status.toLowerCase() : '';
+    
     // Add in_progress status if applicable
-    if (['in_progress', 'completed', 'done', 'resolved', 'fixed'].includes(issue.status?.toLowerCase())) {
+    if (['in_progress', 'completed', 'done', 'resolved', 'fixed'].includes(statusLower)) {
       // Estimate in_progress date as 3 days after creation
       const inProgressDate = new Date(new Date(createdDate).getTime() + 3*24*60*60*1000);
       statuses.push({
@@ -242,7 +253,7 @@ export default function IssueDetailScreen() {
     }
     
     // Add completed status if applicable
-    if (['completed', 'done', 'resolved', 'fixed'].includes(issue.status?.toLowerCase())) {
+    if (['completed', 'done', 'resolved', 'fixed'].includes(statusLower)) {
       // Estimate completion date as 7 days after creation
       const completedDate = new Date(new Date(createdDate).getTime() + 7*24*60*60*1000);
       statuses.push({
@@ -254,7 +265,7 @@ export default function IssueDetailScreen() {
     }
     
     // Add rejected status if applicable
-    if (['rejected', 'closed', 'denied', 'cancelled'].includes(issue.status?.toLowerCase())) {
+    if (['rejected', 'closed', 'denied', 'cancelled'].includes(statusLower)) {
       // Estimate rejection date as 2 days after creation
       const rejectedDate = new Date(new Date(createdDate).getTime() + 2*24*60*60*1000);
       statuses.push({
@@ -285,30 +296,42 @@ export default function IssueDetailScreen() {
   };
   
   // Get coordinates from issue
-  const getCoordinates = (issue: IssueDetail) => {
+  const getCoordinates = (issue: IssueDetail): { latitude: number; longitude: number } => {
+    // Validate if we have usable latitude/longitude
+    const hasValidDirectCoords = 
+      issue.latitude !== undefined && 
+      issue.longitude !== undefined && 
+      !isNaN(Number(issue.latitude)) && 
+      !isNaN(Number(issue.longitude)) &&
+      Number(issue.latitude) !== 0 && 
+      Number(issue.longitude) !== 0;
+    
     // First, try to use latitude/longitude fields from issue
-    if (issue.latitude && issue.longitude && 
-        issue.latitude !== 0 && issue.longitude !== 0) {
-      console.log('Using direct latitude/longitude from issue data');
+    if (hasValidDirectCoords) {
+      console.log('Using direct latitude/longitude from issue data:', issue.latitude, issue.longitude);
       return {
-        latitude: issue.latitude,
-        longitude: issue.longitude
+        latitude: Number(issue.latitude),
+        longitude: Number(issue.longitude)
       };
     }
     
-    // If not available, check if we have coordinates in a different format
-    if (issue.coordinates) {
-      console.log('Using coordinates object from issue data');
+    // If not available, check if we have coordinates in a nested coordinates object
+    if (issue.coordinates && 
+        issue.coordinates.latitude !== undefined &&
+        issue.coordinates.longitude !== undefined &&
+        !isNaN(Number(issue.coordinates.latitude)) &&
+        !isNaN(Number(issue.coordinates.longitude)) &&
+        Number(issue.coordinates.latitude) !== 0 &&
+        Number(issue.coordinates.longitude) !== 0) {
+      console.log('Using coordinates object from issue data:', issue.coordinates);
       return {
-        latitude: issue.coordinates.latitude || 0,
-        longitude: issue.coordinates.longitude || 0
+        latitude: Number(issue.coordinates.latitude),
+        longitude: Number(issue.coordinates.longitude)
       };
     }
     
-    // Last resort: If issue has location field but not coordinates,
-    // we could potentially geocode it, but for now return default coordinates
-    // Default to Akdeniz University campus center
-    console.log('Using default campus coordinates');
+    // Default to Akdeniz University campus center or another appropriate default
+    console.log('Using default campus coordinates - no valid coordinates found in issue data');
     return {
       latitude: 36.8945,  // Default latitude (campus center)
       longitude: 30.6520  // Default longitude (campus center)
@@ -365,7 +388,7 @@ export default function IssueDetailScreen() {
   
   // Prepare marker for OSMMap
   const issueMarker = {
-    id: issue.id,
+    id: issue.hexId,
     coordinates: coordinates,
     title: issue.title,
     description: getLocationString(issue),

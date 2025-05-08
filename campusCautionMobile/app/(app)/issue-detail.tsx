@@ -32,7 +32,7 @@ interface IssueDetail {
   hexId: string; // Hexadecimal string representation 
   title: string;
   description: string;
-  status: string;
+  status: string | number;
   departmentId?: number;
   departmentName?: string;
   location?: string;
@@ -155,34 +155,49 @@ export default function IssueDetailScreen() {
   };
 
   // Get status color
-  const getStatusColor = (status: string | undefined) => {
+  const getStatusColor = (status: string | number | undefined) => {
     // Handle undefined or null status
-    if (!status) return '#4b5563'; // Default gray color
+    if (status === undefined || status === null) return '#4b5563'; // Default gray color
     
-    const statusLower = status.toLowerCase();
+    // Handle numeric status codes
+    if (typeof status === 'number') {
+      switch(status) {
+        case 0: return '#444444'; // Received/Pending (dark gray)
+        case 1: return '#F59E0B'; // In Progress (yellow)
+        case 2: return '#10B981'; // Completed (green)
+        case 3: return '#DC2626'; // Rejected (red)
+        default: return '#4b5563'; // Unknown (gray)
+      }
+    }
+    
+    const statusLower = String(status).toLowerCase();
     
     switch (statusLower) {
       case 'completed':
       case 'done':
       case 'resolved':
       case 'fixed':
+      case '2':
         return '#10B981';
       case 'in_progress':
       case 'inprogress':
       case 'in progress':
       case 'processing':
       case 'working':
+      case '1':
         return '#F59E0B';
       case 'received':
       case 'open':
       case 'new':
       case 'pending':
       case 'submitted':
+      case '0':
         return '#444444';
       case 'rejected':
       case 'closed':
       case 'denied':
       case 'cancelled':
+      case '3':
         return '#DC2626';
       default:
         return '#4b5563';
@@ -190,37 +205,52 @@ export default function IssueDetailScreen() {
   };
   
   // Get status label
-  const getStatusLabel = (status: string | undefined) => {
+  const getStatusLabel = (status: string | number | undefined) => {
     // Handle undefined or null status
-    if (!status) return 'Unknown';
+    if (status === undefined || status === null) return 'Unknown';
     
-    const statusLower = status.toLowerCase();
+    // Handle numeric status codes
+    if (typeof status === 'number') {
+      switch(status) {
+        case 0: return 'Received';
+        case 1: return 'In Progress';
+        case 2: return 'Completed';
+        case 3: return 'Rejected';
+        default: return `Status ${status}`;
+      }
+    }
+    
+    const statusLower = String(status).toLowerCase();
     
     switch (statusLower) {
       case 'completed':
       case 'done':
       case 'resolved':
       case 'fixed':
+      case '2':
         return 'Completed';
       case 'in_progress':
       case 'inprogress':
       case 'in progress':
       case 'processing':
       case 'working':
+      case '1':
         return 'In Progress';
       case 'received':
       case 'open':
       case 'new':
       case 'pending':
       case 'submitted':
+      case '0':
         return 'Received';
       case 'rejected':
       case 'closed':
       case 'denied':
       case 'cancelled':
+      case '3':
         return 'Rejected';
       default:
-        return status;
+        return String(status);
     }
   };
   
@@ -237,11 +267,54 @@ export default function IssueDetailScreen() {
       message: 'Your issue has been received and is being reviewed.'
     });
     
-    // Safely handle status - if status is undefined, assume it's "received" only
-    const statusLower = issue.status ? issue.status.toLowerCase() : '';
+    // Determine status for timeline
+    let statusValue = issue.status;
+    let statusLower = '';
+    
+    // Handle numeric status
+    if (typeof statusValue === 'number') {
+      // Convert numeric status to corresponding string for timeline
+      switch(statusValue) {
+        case 1: 
+          statusLower = 'in_progress';
+          break;
+        case 2:
+          statusLower = 'completed';
+          break;
+        case 3:
+          statusLower = 'rejected';
+          break;
+        case 0:
+        default:
+          statusLower = 'received';
+      }
+    } else if (statusValue) {
+      // If it's a string, convert to lowercase
+      statusLower = String(statusValue).toLowerCase();
+    }
+    
+    // Check if status is "in progress" or completed
+    const isInProgress = statusLower === 'in_progress' || 
+                         statusLower === 'inprogress' || 
+                         statusLower === '1' || 
+                         (typeof statusValue === 'number' && statusValue === 1);
+                         
+    const isCompleted = statusLower === 'completed' || 
+                        statusLower === 'done' || 
+                        statusLower === 'resolved' || 
+                        statusLower === 'fixed' ||
+                        statusLower === '2' || 
+                        (typeof statusValue === 'number' && statusValue === 2);
+                        
+    const isRejected = statusLower === 'rejected' || 
+                       statusLower === 'closed' || 
+                       statusLower === 'denied' || 
+                       statusLower === 'cancelled' ||
+                       statusLower === '3' || 
+                       (typeof statusValue === 'number' && statusValue === 3);
     
     // Add in_progress status if applicable
-    if (['in_progress', 'completed', 'done', 'resolved', 'fixed'].includes(statusLower)) {
+    if (isInProgress || isCompleted) {
       // Estimate in_progress date as 3 days after creation
       const inProgressDate = new Date(new Date(createdDate).getTime() + 3*24*60*60*1000);
       statuses.push({
@@ -253,7 +326,7 @@ export default function IssueDetailScreen() {
     }
     
     // Add completed status if applicable
-    if (['completed', 'done', 'resolved', 'fixed'].includes(statusLower)) {
+    if (isCompleted) {
       // Estimate completion date as 7 days after creation
       const completedDate = new Date(new Date(createdDate).getTime() + 7*24*60*60*1000);
       statuses.push({
@@ -265,7 +338,7 @@ export default function IssueDetailScreen() {
     }
     
     // Add rejected status if applicable
-    if (['rejected', 'closed', 'denied', 'cancelled'].includes(statusLower)) {
+    if (isRejected) {
       // Estimate rejection date as 2 days after creation
       const rejectedDate = new Date(new Date(createdDate).getTime() + 2*24*60*60*1000);
       statuses.push({

@@ -50,19 +50,11 @@ services:
       - rabbitmq
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - MongoDB__ConnectionString=mongodb://mongodb:27017
+      - MongoDB__ConnectionString=mongodb+srv://cefakarberkay:berkay01@campuscation.jtmagbt.mongodb.net/?retryWrites=true&w=majority&appName=CampusCation
+      - MongoDB__Database=IssueDb
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__UserName=user
       - RabbitMQ__Password=password
-    networks:
-      - microservice-network
-
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
     networks:
       - microservice-network
 
@@ -101,7 +93,6 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
-  mongodb_data:
 
 networks:
   microservice-network:

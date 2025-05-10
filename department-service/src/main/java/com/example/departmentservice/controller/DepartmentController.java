@@ -1,8 +1,10 @@
 package com.example.departmentservice.controller;
 
+import com.example.departmentservice.dto.DepartmentDto;
 import com.example.departmentservice.model.Department;
 import com.example.departmentservice.service.DepartmentIssueService;
 import com.example.departmentservice.service.DepartmentService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,10 +30,10 @@ public class DepartmentController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<Department> createDepartment(@RequestBody Department department) {
-
+    public ResponseEntity<DepartmentDto> createDepartment(@Valid @RequestBody DepartmentDto departmentDto) {
+        Department department = mapToEntity(departmentDto, true);
         Department createdDepartment = departmentService.createDepartment(department);
-        return new ResponseEntity<>(createdDepartment, HttpStatus.CREATED);
+        return new ResponseEntity<>(mapToDto(createdDepartment), HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
@@ -45,4 +47,19 @@ public class DepartmentController {
         return departmentIssueService.getIssuesForDepartment(id);
     }
 
+    private Department mapToEntity(DepartmentDto departmentDto, boolean isActiveDefault) {
+        Department department = new Department();
+        department.setName(departmentDto.getName());
+        department.setDescription(departmentDto.getDescription());
+        department.setActive(isActiveDefault);
+        return department;
+    }
+
+    private DepartmentDto mapToDto(Department department) {
+        DepartmentDto departmentDto = new DepartmentDto();
+        departmentDto.setId(department.getId());
+        departmentDto.setName(department.getName());
+        departmentDto.setDescription(department.getDescription());
+        return departmentDto;
+    }
 }

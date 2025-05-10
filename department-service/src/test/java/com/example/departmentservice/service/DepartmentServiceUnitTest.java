@@ -10,6 +10,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -31,14 +32,19 @@ public class DepartmentServiceUnitTest {
     }
 
     @Test
-    void getAllDepartments_returnsAllDepartments() {
+    void getAllDepartments_returnsAllDepartmentsWithNewFields() {
         // Arrange
+        LocalDateTime now = LocalDateTime.now();
         List<Department> expectedDepartments = Arrays.asList(
-                new Department("IT", "Information Technology"),
-                new Department("HR", "Human Resources")
+                new Department("IT", "Information Technology", true),
+                new Department("HR", "Human Resources", false)
         );
         expectedDepartments.get(0).setId(1L);
+        expectedDepartments.get(0).setCreatedAt(now);
+        expectedDepartments.get(0).setUpdatedAt(now);
         expectedDepartments.get(1).setId(2L);
+        expectedDepartments.get(1).setCreatedAt(now.minusDays(1));
+        expectedDepartments.get(1).setUpdatedAt(now.minusDays(1));
         when(departmentRepository.findAll()).thenReturn(expectedDepartments);
 
         // Act
@@ -48,17 +54,27 @@ public class DepartmentServiceUnitTest {
         assertEquals(expectedDepartments.size(), actualDepartments.size());
         assertEquals(expectedDepartments.get(0).getName(), actualDepartments.get(0).getName());
         assertEquals(expectedDepartments.get(0).getDescription(), actualDepartments.get(0).getDescription());
+        assertEquals(expectedDepartments.get(0).getActive(), actualDepartments.get(0).getActive());
+        assertEquals(expectedDepartments.get(0).getCreatedAt(), actualDepartments.get(0).getCreatedAt());
+        assertEquals(expectedDepartments.get(0).getUpdatedAt(), actualDepartments.get(0).getUpdatedAt());
+
         assertEquals(expectedDepartments.get(1).getName(), actualDepartments.get(1).getName());
         assertEquals(expectedDepartments.get(1).getDescription(), actualDepartments.get(1).getDescription());
+        assertEquals(expectedDepartments.get(1).getActive(), actualDepartments.get(1).getActive());
+        assertEquals(expectedDepartments.get(1).getCreatedAt(), actualDepartments.get(1).getCreatedAt());
+        assertEquals(expectedDepartments.get(1).getUpdatedAt(), actualDepartments.get(1).getUpdatedAt());
         verify(departmentRepository, times(1)).findAll();
     }
 
     @Test
-    void getDepartmentById_existingId_returnsDepartment() {
+    void getDepartmentById_existingId_returnsDepartmentWithNewFields() {
         // Arrange
         Long departmentId = 1L;
-        Department expectedDepartment = new Department("IT", "Information Technology");
+        LocalDateTime now = LocalDateTime.now();
+        Department expectedDepartment = new Department("IT", "Information Technology", true);
         expectedDepartment.setId(departmentId);
+        expectedDepartment.setCreatedAt(now);
+        expectedDepartment.setUpdatedAt(now);
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(expectedDepartment));
 
         // Act
@@ -68,6 +84,9 @@ public class DepartmentServiceUnitTest {
         assertEquals(expectedDepartment.getId(), actualDepartment.getId());
         assertEquals(expectedDepartment.getName(), actualDepartment.getName());
         assertEquals(expectedDepartment.getDescription(), actualDepartment.getDescription());
+        assertEquals(expectedDepartment.getActive(), actualDepartment.getActive());
+        assertEquals(expectedDepartment.getCreatedAt(), actualDepartment.getCreatedAt());
+        assertEquals(expectedDepartment.getUpdatedAt(), actualDepartment.getUpdatedAt());
         verify(departmentRepository, times(1)).findById(departmentId);
     }
 
@@ -89,11 +108,14 @@ public class DepartmentServiceUnitTest {
     }
 
     @Test
-    void createDepartment_validDepartment_savesAndReturnsCreatedDepartment() {
+    void createDepartment_validDepartment_savesAndReturnsCreatedDepartmentWithNewFields() {
         // Arrange
-        Department departmentToCreate = new Department("Finance", "Financial Department");
-        Department savedDepartment = new Department("Finance", "Financial Department");
+        Department departmentToCreate = new Department("Finance", "Financial Department", true);
+        LocalDateTime now = LocalDateTime.now();
+        Department savedDepartment = new Department("Finance", "Financial Department", true);
         savedDepartment.setId(3L);
+        savedDepartment.setCreatedAt(now);
+        savedDepartment.setUpdatedAt(now);
         when(departmentRepository.save(any(Department.class))).thenReturn(savedDepartment);
 
         // Act
@@ -103,6 +125,9 @@ public class DepartmentServiceUnitTest {
         assertEquals(savedDepartment.getId(), actualDepartment.getId());
         assertEquals(savedDepartment.getName(), actualDepartment.getName());
         assertEquals(savedDepartment.getDescription(), actualDepartment.getDescription());
+        assertEquals(savedDepartment.getActive(), actualDepartment.getActive());
+        assertEquals(savedDepartment.getCreatedAt(), actualDepartment.getCreatedAt());
+        assertEquals(savedDepartment.getUpdatedAt(), actualDepartment.getUpdatedAt());
         verify(departmentRepository, times(1)).save(departmentToCreate);
     }
 }

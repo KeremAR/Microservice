@@ -1,5 +1,6 @@
 package com.example.departmentservice.controller;
 
+import com.example.departmentservice.dto.DepartmentDto;
 import com.example.departmentservice.model.Department;
 import com.example.departmentservice.service.DepartmentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -31,32 +33,44 @@ public class DepartmentControllerUnitTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void getAllDepartments_returnsOkAndDepartmentList() throws Exception {
+    void getAllDepartments_returnsOkAndDepartmentListWithNewFields() throws Exception {
         // Arrange
+        LocalDateTime now = LocalDateTime.now();
         List<Department> departments = Arrays.asList(
-                new Department("IT", "Information Technology"),
-                new Department("HR", "Human Resources")
+                new Department("IT", "Information Technology", true),
+                new Department("HR", "Human Resources", false)
         );
         departments.get(0).setId(1L);
+        departments.get(0).setCreatedAt(now);
+        departments.get(0).setUpdatedAt(now);
         departments.get(1).setId(2L);
+        departments.get(1).setCreatedAt(now.minusDays(1));
+        departments.get(1).setUpdatedAt(now.minusDays(1));
         when(departmentService.getAllDepartments()).thenReturn(departments);
 
         // Act & Assert
-        mockMvc.perform(MockMvcRequestBuilders.get("/departments")
+        mockMvc.perform(MockMvcRequestBuilders.get("/departments/get-all")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(MockMvcResultMatchers.jsonPath("$[0].id").value(1))
                 .andExpect(MockMvcResultMatchers.jsonPath("$[0].name").value("IT"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$[1].description").value("Human Resources"));
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].description").value("Information Technology"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].active").value(true))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].createdAt").exists())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].updatedAt").exists())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[1].active").value(false));
     }
 
     @Test
-    void getDepartmentById_existingId_returnsOkAndDepartment() throws Exception {
+    void getDepartmentById_existingId_returnsOkAndDepartmentWithNewFields() throws Exception {
         // Arrange
         Long departmentId = 1L;
-        Department department = new Department("IT", "Information Technology");
+        LocalDateTime now = LocalDateTime.now();
+        Department department = new Department("IT", "Information Technology", true);
         department.setId(departmentId);
+        department.setCreatedAt(now);
+        department.setUpdatedAt(now);
         when(departmentService.getDepartmentById(departmentId)).thenReturn(department);
 
         // Act & Assert
@@ -65,27 +79,39 @@ public class DepartmentControllerUnitTest {
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.id").value(departmentId))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.name").value("IT"));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.name").value("IT"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.active").value(true))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.createdAt").exists())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.updatedAt").exists());
     }
 
     @Test
-    void createDepartment_validDepartment_returnsCreatedAndDepartment() throws Exception {
+    void createDepartment_validDepartmentDto_returnsCreatedAndDepartmentDto() throws Exception {
         // Arrange
-        Department departmentToCreate = new Department("Finance", "Financial Department");
-        Department createdDepartment = new Department("Finance", "Financial Department");
+        DepartmentDto departmentToCreateDto = new DepartmentDto();
+        departmentToCreateDto.setName("Finance");
+        departmentToCreateDto.setDescription("Financial Department");
+
+        Department createdDepartment = new Department("Finance", "Financial Department", true);
         createdDepartment.setId(3L);
+        createdDepartment.setCreatedAt(LocalDateTime.now());
+        createdDepartment.setUpdatedAt(LocalDateTime.now());
+
+        DepartmentDto createdDepartmentDto = new DepartmentDto();
+        createdDepartmentDto.setId(3L);
+        createdDepartmentDto.setName("Finance");
+        createdDepartmentDto.setDescription("Financial Department");
+
         when(departmentService.createDepartment(any(Department.class))).thenReturn(createdDepartment);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/departments")
+        // Act & Assert
+        mockMvc.perform(MockMvcRequestBuilders.post("/departments/create")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(departmentToCreate)))
+                        .content(objectMapper.writeValueAsString(departmentToCreateDto)))
                 .andExpect(MockMvcResultMatchers.status().isCreated())
                 .andExpect(MockMvcResultMatchers.content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.id").value(3))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.name").value("Finance"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.description").value("Financial Department")); // description'ı da ekledim
+                .andExpect(MockMvcResultMatchers.jsonPath("$.description").value("Financial Department"));
     }
-
-
 }
-

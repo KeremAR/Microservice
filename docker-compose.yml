@@ -18,6 +18,17 @@ services:
       - postgres
       - rabbitmq
 
+  department_service:
+    build: ./department-service
+    container_name: department-service
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+    ports:
+      - "8083:8083"
   user-service:
     build: ./user-service2
     ports:

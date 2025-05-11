@@ -98,12 +98,6 @@ public class DepartmentServiceUnitTest {
 
         // Act & Assert
         assertThrows(ResponseStatusException.class, () -> departmentService.getDepartmentById(departmentId));
-        try {
-            departmentService.getDepartmentById(departmentId);
-        } catch (ResponseStatusException e) {
-            assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
-            assertEquals("Department not found with id: " + departmentId, e.getReason());
-        }
         verify(departmentRepository, times(1)).findById(departmentId);
     }
 

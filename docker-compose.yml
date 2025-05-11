@@ -1,29 +1,35 @@
 version: '3.8'
 
 services:
-  # User Service
-  user_service:
-    build: ./user-service
-    container_name: user-service
-    depends_on:
-      user-service-postgres:
-        condition: service_healthy
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/userdb
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-      - SPRING_RABBITMQ_HOST=rabbitmq
-      - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
+  api-gateway:
+    build: ./gateway-service
     ports:
-      - "8081:8080"
+      - "3000:3000"
+    environment:
+      - NODE_ENV=docker
+    volumes:
+      - ./gateway-service/config:/app/config
     networks:
       - microservice-network
+    restart: always
+    depends_on:
+      - user-service
+      - issue-service
+      - postgres
+      - rabbitmq
 
   department_service:
     build: ./department-service
     container_name: department-service
+  user-service:
+    build: ./user-service2
+    ports:
+      - "5001:8000"
+    depends_on:
+      postgres:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require
       - SPRING_RABBITMQ_HOST=rabbitmq
@@ -32,19 +38,44 @@ services:
       - SPRING_RABBITMQ_PASSWORD=guest
     ports:
       - "8083:8083"
+      # Supabase bağlantı bilgileri (örnek değerler, kendi bilgilerinizle değiştirin)
+      - SUPABASE_DB_HOST=ahrhnlmeimlxttvujmpa.supabase.co
+      - SUPABASE_DB_PORT=5432
+      - SUPABASE_DB_NAME=postgres  # Supabase'in varsayılan DB adı "postgres"
+      - SUPABASE_DB_USER=postgres
+      - SUPABASE_DB_PASSWORD=Qfnr9GtwhCrlVOK3
+      # Supabase HTTP API için gerekli anahtarlar
+      - SUPABASE_URL=https://ahrhnlmeimlxttvujmpa.supabase.co
+      - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFocmhubG1laW1seHR0dnVqbXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MDcxMjIsImV4cCI6MjA2MjI4MzEyMn0.6jJ1IxliIFw4zjBL5BO0Mycdrxnu1LyTLNuf_MKckio
+    volumes:
+      - ./user-service2:/app
     networks:
       - microservice-network
 
-  # PostgreSQL for User Service
-  user-service-postgres:
-    image: postgres:latest
-    container_name: user-service-postgres
-    environment:
-      POSTGRES_DB: userdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+  issue-service:
+    build: ./IssueService
     ports:
-      - "5433:5432"
+      - "5003:8080"
+    depends_on:
+      - rabbitmq
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - MongoDB__ConnectionString=mongodb+srv://cefakarberkay:berkay01@campuscation.jtmagbt.mongodb.net/?retryWrites=true&w=majority&appName=CampusCation
+      - MongoDB__Database=IssueDb
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=user
+      - RabbitMQ__Password=password
+    networks:
+      - microservice-network
+
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=userdb
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -55,71 +86,29 @@ services:
       timeout: 5s
       retries: 5
 
-  # RabbitMQ Service
   rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: user_service_rabbitmq
+    image: rabbitmq:3-management
     ports:
-      - "5672:5672"   # AMQP protocol port
-      - "15672:15672" # Management UI port
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI port
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
-      - user-network
-
-  # Future services will be added here
-  # Example:
-  # issue-service:
-  #   build: ./issue-service
-  #   container_name: issue-service
-  #   ports:
-  #     - "8082:8082"
-  #   networks:
-  #     - campus-network
-
-  # department-service:
-  #   build: ./department-service
-  #   container_name: department-service
-  #   ports:
-  #     - "8083:8083"
-  #   networks:
-  #     - campus-network
-
-  # notification-service:
-  #   build: ./notification-service
-  #   container_name: notification-service
-  #   ports:
-  #     - "8084:8084"
-  #   networks:
-  #     - campus-network
-
-  # gateway-service:
-  #   build: ./gateway-service
-  #   container_name: gateway-service
-  #   ports:
-  #     - "8080:8080"
-  #   networks:
-  #     - campus-network
-
-networks:
-  microservice-network:
-    driver: bridge
-  user-network:
-    driver: bridge
+      - microservice-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
 volumes:
   postgres_data:
   rabbitmq_data:
-  # Future volumes will be added here
-  # Example:
-  # issue_mongodb_data:
-  # department_postgres_data:
-  # notification_postgres_data: 
+
+networks:
+  microservice-network:
+    driver: bridge

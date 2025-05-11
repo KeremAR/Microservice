@@ -5,6 +5,9 @@ using IssueService.Domain.IssueAggregate;
 using IssueService.Repositories.Interfaces;
 using IssueService.Services.Interfaces;
 using MediatR;
+using System.Threading;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace IssueService.Services.Implementations;
 
@@ -21,7 +24,7 @@ public class IssueServiceImpl : IIssueService
         _mediator = mediator;
     }
 
-    public async Task<IssueResponse> ReportIssueAsync(CreateIssueRequest request)
+    public async Task<Issue> ReportIssueAsync(CreateIssueRequest request)
     {
         // 1) Aggregate root'tan yeni issue oluştur
         var issue = new Issue(
@@ -29,7 +32,10 @@ public class IssueServiceImpl : IIssueService
             description: request.Description,
             category: request.Category,
             photoUrl: request.PhotoUrl,
-            userId: request.UserId);
+            userId: request.UserId,
+            departmentId: request.DepartmentId,
+            latitude: request.Latitude,
+            longitude: request.Longitude);
 
         // 2) MongoDB'ye kaydet
         await _repository.CreateAsync(issue);
@@ -38,42 +44,89 @@ public class IssueServiceImpl : IIssueService
         await DispatchEventsAsync(issue);
 
         // 4) Response DTO'su dön
-        return new IssueResponse(issue);
+        return issue;
     }
 
-    public async Task<IssueResponse> GetIssueByIdAsync(string id)
+    public async Task<Issue> GetIssueByIdAsync(string id)
     {
         var issue = await _repository.GetByIdAsync(id);
         if (issue == null)
-            throw new Exception("Issue not found");
+            throw new KeyNotFoundException("Issue not found");
             
-        return new IssueResponse(issue);
+        return issue;
     }
 
-    public async Task UpdateIssueStatusAsync(string id, string status)
+    public async Task UpdateIssueStatusAsync(string id, IssueStatus status)
     {
         // 1) DB'den aggregate'ı al
         var issue = await _repository.GetByIdAsync(id);
 
         if (issue == null)
-            throw new Exception("Issue not found");
+            throw new KeyNotFoundException("Issue not found");
 
         // 2) Domain method üzerinden güncelleme yap
-        if (status == "Resolved")
+        if (status == IssueStatus.Resolved)
             issue.Resolve(); // domain event ekler
 
         // 3) DB'de sadece status'u güncelle
-        await _repository.UpdateStatusAsync(id, issue.Status);
+        await _repository.UpdateStatusAsync(id, status);
 
         // 4) Domain event varsa yayınla
         await DispatchEventsAsync(issue);
+    }
+
+    public async Task<IEnumerable<Issue>> GetIssuesByUserIdAsync(string userId)
+    {
+        var issues = await _repository.GetByUserIdAsync(userId);
+        return issues;
+    }
+
+    public async Task<IEnumerable<Issue>> GetAllIssuesAsync()
+    {
+        var issues = await _repository.GetAllAsync();
+        return issues;
+    }
+
+    public async Task<IEnumerable<Issue>> GetIssuesByDepartmentIdAsync(int departmentId)
+    {
+        var issues = await _repository.GetByDepartmentIdAsync(departmentId);
+        return issues;
+    }
+
+    public async Task<bool> DeleteIssueAsync(string id)
+    {
+        Console.WriteLine($"DeleteIssueAsync çağrıldı, ID: {id}");
+        try
+        {
+            // Önce issue'nin var olup olmadığını kontrol edelim
+            var issue = await _repository.GetByIdAsync(id);
+            
+            if (issue == null)
+            {
+                Console.WriteLine($"Issue bulunamadı, ID: {id}");
+                throw new KeyNotFoundException("Issue not found");
+            }
+                
+            Console.WriteLine($"Issue bulundu, ID: {id}, Title: {issue.Title}");
+            
+            // Issue'yu sil
+            var result = await _repository.DeleteAsync(id);
+            Console.WriteLine($"Silme işlemi sonucu: {result}");
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DeleteIssueAsync'de hata: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            throw; // Rethrow the exception to propagate it upwards
+        }
     }
 
     private async Task DispatchEventsAsync(Issue issue)
     {
         foreach (var @event in issue.Events)
         {
-            await _mediator.Publish(@event);
+            await _mediator.Publish(@event, CancellationToken.None);
         }
 
         issue.ClearEvents();

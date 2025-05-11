@@ -11,7 +11,10 @@ public class MongoDbContext
 
     public MongoDbContext(IConfiguration configuration)
     {
-        var client = new MongoClient(configuration["MongoDB:ConnectionString"]);
+        var connectionString = configuration["MongoDB:ConnectionString"];
+        var settings = MongoClientSettings.FromConnectionString(connectionString);
+        settings.ServerApi = new ServerApi(ServerApiVersion.V1);
+        var client = new MongoClient(settings);
         _database = client.GetDatabase(configuration["MongoDB:Database"]);
     }
 

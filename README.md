@@ -1,4 +1,42 @@
+# Campus Issue Reporting and Tracking System - Microservice Project
 
+## 🚀 Event Flow - Core Scenario: Reporting an Issue
+
+This section outlines the step-by-step interaction of microservices during the core user scenario of "Reporting an Issue." This flow helps in understanding the current and planned structure of the project.
+
+1.  **User Login (Mobile Frontend & User Service):**
+    *   The user logs into the **Mobile Frontend** application using either their Microsoft account (Entra ID) or email/password.
+    *   Authentication processes (login/signup and token management) are handled by the **User Service** (Java/Spring Boot).
+
+2.  **Issue Reporting (Mobile Frontend -> Issue Service):**
+    *   The user reports a new issue (title, description, category, photo, etc.) through the mobile application interface (e.g., "Inform Us" button).
+    *   **Mobile Frontend** sends an HTTP POST request with this information to the `/issues/report` endpoint of the **Issue Service** (ASP.NET Core/C#). *(Note: This request might be routed through the Gateway in the future)*.
+
+3.  **Issue Processing and Saving (Issue Service):**
+    *   **Issue Service** receives the request, validates it, and creates a new `Issue` object.
+    *   It saves this `Issue` object to its own **MongoDB** database.
+    *   Upon successful completion, an `IssueCreatedEvent` domain event is triggered internally within the service (using MediatR).
+
+4.  **Event Publishing (Issue Service -> RabbitMQ):**
+    *   A handler listening to the `IssueCreatedEvent` (`IssueCreatedHandler`) formats a message containing the event details (Issue ID, User ID, Category, etc.).
+    *   It publishes this message to the central messaging system, **RabbitMQ** (to the `issue_created` queue/exchange).
+
+5.  **Department Notification (RabbitMQ -> Department Service - *Planned*):**
+    *   The **Department Service** (Java/Spring Boot - *Planned for development*) is intended to listen for the `IssueCreatedEvent` from RabbitMQ.
+    *   Upon receiving this event, the **Department Service** might process the relevant issue into its database, assign it to the appropriate department, or generate statistical data.
+
+6.  **User Notification (Issue Service -> RabbitMQ -> Notification Service - *Planned*):**
+    *   In the future, when the status of an issue changes within the **Issue Service** (e.g., "Resolved," "In Progress"), new events like `IssueStatusChangedEvent` will be published to RabbitMQ.
+    *   The **Notification Service** (Node.js/NestJS - *Planned for development*) will listen for these status change events.
+    *   Upon receiving the event, the **Notification Service** will send a status update notification to the original user who reported the issue, using methods like email, push notification, or SMS.
+
+**Summary:** In the current implementation, users can log in via the **Mobile Frontend** (using **User Service**) and report issues to the **Issue Service**. The **Issue Service** then publishes this event via **RabbitMQ**. The processing of these events by the department and notification services is planned for subsequent development phases.
+
+---
+
+*The following section contains the general project description and service details.*
+
+## 🎯 Project Goal and Scope
 
 ### 1️⃣ User Service  - Spring Boot – Java (PostgreSQL)
 - Kullanıcı kaydı, giriş (auth), roller (admin, öğrenci vb.)

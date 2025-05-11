@@ -309,7 +309,13 @@ export default function TrackScreen() {
       
       // Check if issues is valid before setting state
       if (Array.isArray(issues)) {
-        setUserIssues(issues);
+        // Sort issues by date (newest first)
+        const sortedIssues = [...issues].sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.date || 0);
+          const dateB = new Date(b.createdAt || b.date || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        setUserIssues(sortedIssues);
       } else {
         console.log('API did not return an array, setting empty array');
         setUserIssues([]);

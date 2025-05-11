@@ -1,20 +1,6 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:14-alpine
-    container_name: department_service_postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: department_db
-    ports:
-      - "5433:5432"
-    networks:
-      - campus-network
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
   rabbitmq:
     image: rabbitmq:3.9-management
     container_name: rabbitmq
@@ -25,7 +11,7 @@ services:
       - campus-network
 
   department-service:
-    build: ./department-service
+    build: .
     container_name: department-service
     ports:
       - "8083:8082"
@@ -33,17 +19,13 @@ services:
       - campus-network
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:Qfnr9GtwhCrlVOK3@db.ahrhnlmeimlxttvujmpa.supabase.co:5432/postgres?sslmode=require
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require
       - SPRING_RABBITMQ_HOST=rabbitmq
       - SPRING_RABBITMQ_USERNAME=guest
       - SPRING_RABBITMQ_PASSWORD=guest
     depends_on:
-      - postgres
       - rabbitmq
 
 networks:
   campus-network:
     driver: bridge
-
-volumes:
-  postgres_data:

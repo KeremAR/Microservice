@@ -265,23 +265,45 @@ export default function HomeScreen() {
   // Process markers for OSMMap from real issues data
   const mapMarkers = allIssues
     .filter(issue => {
-      // Check if status is not completed (handling both string and numeric formats)
+      // Check if status is not completed
       const statusStr = String(issue.status || '').toLowerCase();
       const isCompleted = statusStr === 'completed' || 
                           statusStr === 'done' || 
                           statusStr === '2' || 
                           issue.status === 2;
       
-      // Log to debug coordinate data
-      console.log(`Issue ${issue.title} - Coords: lat=${issue.latitude}, lng=${issue.longitude}`);
+      // Check if coordinates are valid (not 0,0 and not undefined)
+      const hasValidCoords = 
+        issue.latitude !== undefined && 
+        issue.longitude !== undefined && 
+        issue.latitude !== 0 && 
+        issue.longitude !== 0;
       
-      return !isCompleted && issue.latitude && issue.longitude;
+      // Debug logs
+      console.log('Processing issue for map:', {
+        title: issue.title,
+        status: issue.status,
+        hasLatitude: !!issue.latitude,
+        hasLongitude: !!issue.longitude,
+        latitude: issue.latitude,
+        longitude: issue.longitude,
+        hasValidCoords: hasValidCoords,
+        isCompleted: isCompleted,
+        willShow: !isCompleted && hasValidCoords
+      });
+      
+      return !isCompleted && hasValidCoords;
     })
     .map(issue => {
-      // Check if we have a hexId, otherwise use id (converted to string)
       const issueId = issue.hexId || (issue.id ? issue.id.toString() : '');
-      console.log(`Adding marker for issue: ${issue.title}, ID: ${issueId}`);
+      console.log(`Adding marker for issue: ${issue.title}, ID: ${issueId}, Coords: ${issue.latitude},${issue.longitude}`);
       
+      // Get status color for the marker
+      const statusColor = (() => {
+        if (issue.status === 1) return '#F59E0B'; // In Progress - Yellow
+        return '#3B82F6'; // Default - Blue (for new/pending)
+      })();
+
       return {
         id: issueId,
         coordinates: {
@@ -290,7 +312,7 @@ export default function HomeScreen() {
         },
         title: issue.title,
         description: issue.description,
-        color: '#3B82F6', // Consistent blue color for all issues
+        color: statusColor,
         isUserIssue: true
       };
     });
@@ -321,6 +343,15 @@ export default function HomeScreen() {
   console.log('Home - Calculated name:', getUserName());
   console.log('Home - Map markers:', mapMarkers.length);
   console.log('Home - Stats:', { receivedCount, inProgressCount, completedCount });
+  
+  // Debug log final markers
+  console.log('Final map markers:', mapMarkers.length, 'markers created');
+  mapMarkers.forEach(marker => {
+    console.log('Marker:', {
+      title: marker.title,
+      coords: marker.coordinates
+    });
+  });
   
   return (
     <View style={styles.container}>
@@ -445,16 +476,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </View>
-
-      {/* Floating Report Button */}
-      <TouchableOpacity 
-        style={styles.floatingButton}
-        onPress={() => router.push('/(app)/create-report')}
-      >
-        <View style={styles.fabGradient}>
-          <Ionicons name="add" size={32} color="white" />
-        </View>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -583,30 +604,5 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: '#3B82F6',
-  },
-  floatingButton: {
-    position: 'absolute',
-    bottom: 90,
-    right: 30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#3B82F6',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    borderWidth: 2,
-    borderColor: 'white',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fabGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
   }
 }); 

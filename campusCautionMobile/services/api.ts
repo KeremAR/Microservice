@@ -261,9 +261,9 @@ export const getUserIssues = async (token: string) => {
       return [];
     }
     
-    // Build URL with the userId parameter
+    // Doğru URL formatıyla oluştur: http://localhost:3000/issue/issues/user/{userId}
     const url = `${API_BASE_URL}/issue/issues/user/${userId}`;
-    console.log('API URL:', url);
+    console.log('API URL for user issues:', url);
     console.log('Token:', token ? `${token.substring(0, 15)}...` : 'Token yok');
     
     const response = await fetch(url, {
@@ -346,20 +346,75 @@ export const getNotifications = async (token: string) => {
 // İstatistikleri getirme (yeni, aktif, tamamlanmış sorun sayıları)
 export const getStats = async (token: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/stats`, {
+    console.log('-------- API: getStats çağrıldı --------');
+    
+    // Use the endpoint from the config
+    const url = `${API_BASE_URL}${API_ENDPOINTS.ISSUES.STATISTICS}`;
+    
+    console.log('Stats API URL:', url);
+    console.log('Token:', token ? `${token.substring(0, 15)}...` : 'Token yok');
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(token),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'İstatistikler alınamadı');
+    console.log('Stats API yanıtı alındı');
+    console.log('Status kodu:', response.status);
+    
+    if (response.status === 404) {
+      console.log('Statistics endpoint not found (404), API may not support this feature');
+      // Return default values
+      return { new: 0, active: 0, completed: 0 };
     }
-
-    return await response.json();
+    
+    const responseText = await response.text();
+    console.log('Yanıt metni:', responseText);
+    
+    let data;
+    try {
+      // Parse JSON response
+      data = responseText ? JSON.parse(responseText) : {};
+      console.log('Stats data parsed successfully');
+    } catch (e) {
+      console.error('JSON parse hatası:', e);
+      throw new Error('Invalid statistics data format');
+    }
+    
+    if (!response.ok) {
+      console.error('Stats API call failed:', data);
+      throw new Error(data.message || data.error || 'Failed to get statistics');
+    }
+    
+    // Map backend response to our expected format
+    // The backend might return data in different formats, so we check for common patterns
+    const statsResult = {
+      new: 0,
+      active: 0, 
+      completed: 0
+    };
+    
+    // Try to extract stats from various possible formats
+    if (data.new !== undefined) statsResult.new = data.new;
+    else if (data.pending !== undefined) statsResult.new = data.pending;
+    else if (data.received !== undefined) statsResult.new = data.received;
+    else if (data.status0 !== undefined) statsResult.new = data.status0;
+    
+    if (data.active !== undefined) statsResult.active = data.active;
+    else if (data.inProgress !== undefined) statsResult.active = data.inProgress;
+    else if (data.processing !== undefined) statsResult.active = data.processing;
+    else if (data.status1 !== undefined) statsResult.active = data.status1;
+    
+    if (data.completed !== undefined) statsResult.completed = data.completed;
+    else if (data.done !== undefined) statsResult.completed = data.done;
+    else if (data.resolved !== undefined) statsResult.completed = data.resolved;
+    else if (data.status2 !== undefined) statsResult.completed = data.status2;
+    
+    console.log('Mapped stats result:', statsResult);
+    return statsResult;
   } catch (error) {
     console.error('Stats fetch error:', error);
-    // Eğer istatistik API'si henüz mevcut değilse varsayılan değer döndür
+    // Return default values if the API call fails
     return { new: 0, active: 0, completed: 0 };
   }
 };
@@ -374,72 +429,92 @@ export const getIssueDetails = async (token: string, issueId: string) => {
       return null;
     }
     
-    // Build URL with the issue ID
-    const url = `${API_BASE_URL}/issue/issues/${issueId}`;
-    console.log('API URL:', url);
-    console.log('Token:', token ? `${token.substring(0, 15)}...` : 'Token yok');
+    console.log('Issue hexId:', issueId);
+    
+    // Extract userId from token (JWT parsing) for potential debugging or user-check
+    let userId = '';
+    if (token && token.split('.').length === 3) {
+      try {
+        // Decode JWT token payload
+        const base64Payload = token.split('.')[1];
+        const payload = JSON.parse(atob(base64Payload));
+        userId = payload.uid || payload.sub || payload.user_id || '';
+        console.log('User ID for getIssueDetails:', userId);
+      } catch (e) {
+        console.error('Token parsing error in getIssueDetails:', e);
+      }
+    }
+    
+    // Use API_ENDPOINTS and hexId for the API call
+    const url = `${API_BASE_URL}${API_ENDPOINTS.ISSUES.DETAIL(issueId)}`;
+    console.log('API URL for issue details:', url);
+    console.log('Token length:', token ? token.length : 0);
+    
+    // Add timeout to the fetch request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
     
     const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(token),
+      signal: controller.signal
     });
+    
+    // Clear the timeout
+    clearTimeout(timeoutId);
 
-    console.log('API yanıtı alındı');
-    console.log('Status kodu:', response.status);
-    console.log('Status metni:', response.statusText);
+    console.log('Status code:', response.status);
+    console.log('Status text:', response.statusText);
+    
+    // For 404 Not Found, return proper null value to show the error UI
+    if (response.status === 404) {
+      console.log('Issue not found (404)');
+      return null;
+    }
     
     const responseText = await response.text();
-    console.log('Yanıt metni:', responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''));
+    // Log a limited portion of the response for debugging
+    console.log('Response text (preview):', responseText.substring(0, 200) + (responseText.length > 200 ? '...' : ''));
     
     let data;
     
     try {
-      // Only try to parse if there's actual content and it's not empty
-      data = responseText ? JSON.parse(responseText) : null;
-      console.log('Yanıt JSON olarak başarıyla işlendi');
+      // Only try to parse if there's actual content
+      data = responseText && responseText.trim() ? JSON.parse(responseText) : null;
+      console.log('Response parsed successfully as JSON');
       
       // Log the structure of the issue to help debugging
       if (data) {
-        console.log('Issue structure - keys:', Object.keys(data));
-        console.log('Issue ID:', data.id);
-        console.log('Issue title:', data.title);
-        console.log('Issue status:', data.status);
-        console.log('Issue location data:', 
-          data.latitude !== undefined ? `latitude: ${data.latitude}` : 'latitude: undefined',
-          data.longitude !== undefined ? `longitude: ${data.longitude}` : 'longitude: undefined'
+        console.log('Issue data received:', 
+          data.id ? 'ID: ' + data.id : 'No ID',
+          data.title ? 'Title: ' + data.title : 'No title', 
+          data.status ? 'Status: ' + data.status : 'No status'
         );
-        // Check for coordinates in other formats
-        if (data.coordinates) {
-          console.log('Issue coordinates object:', data.coordinates);
-        }
+      } else {
+        console.log('No issue data in response (null or empty)');
       }
     } catch (e) {
-      console.error('JSON parse hatası:', e);
-      console.error('Invalid response text:', responseText.substring(0, 200) + '...');
+      console.error('JSON parse error:', e);
+      console.error('Invalid response text:', responseText.substring(0, 100) + '...');
       return null;
     }
     
     if (!response.ok) {
-      console.log('İsteğin yanıtı başarısız (HTTP ' + response.status + ')');
-      
-      // Daha detaylı hata mesajı oluştur
-      let errorMessage = 'Sorun detayları alınamadı';
-      
-      if (data && data.message) {
-        errorMessage = data.message;
-      } else if (data && data.detail && data.detail.message) {
-        errorMessage = data.detail.message;
-      }
-      
-      console.error('Hata detayları:', data);
-      throw new Error(errorMessage);
+      console.log('Request failed (HTTP ' + response.status + ')');
+      return null;
     }
     
-    console.log('API çağrısı başarılı, veri dönülüyor');
+    // If we get an empty response or invalid issue data, return null
+    if (!data || !data.id) {
+      console.log('API returned invalid issue data');
+      return null;
+    }
+    
+    console.log('API call successful, returning issue data');
     return data;
     
   } catch (error) {
-    console.error('Issue details fetch error:', error);
-    throw error;
+    console.error('Issue details fetch error:', error instanceof Error ? error.message : String(error));
+    return null; // Return null instead of throwing to show error UI
   }
 }; 

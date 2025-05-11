@@ -17,10 +17,11 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // Define Issue type based on backend response structure
 interface Issue {
-  id: string;
+  id: any; // Original MongoDB ObjectId (as object)
+  hexId: string; // Hexadecimal string representation of ObjectId
   title: string;
   description: string;
-  status: string; // Make this more flexible to accept any string
+  status?: string | number; // Status can be string or numeric (0,1,2,3)
   departmentId?: number; // Make optional since it might not always be present
   createdAt?: string; // Make optional
   updatedAt?: string; // Make optional
@@ -33,32 +34,50 @@ interface Issue {
 
 const TOKEN_KEY = 'auth_token';
 
-const getStatusColor = (status: string) => {
-  // Convert to lowercase for case-insensitive comparison
-  const statusLower = status?.toLowerCase() || '';
+const getStatusColor = (status: string | number | undefined) => {
+  // Handle undefined or null status
+  if (status === undefined || status === null) return '#4b5563'; // Default gray color
+  
+  // Handle numeric status codes
+  if (typeof status === 'number') {
+    switch(status) {
+      case 0: return '#2563eb'; // Received/Pending (blue)
+      case 1: return '#eab308'; // In Progress (yellow)
+      case 2: return '#16a34a'; // Completed (green)
+      case 3: return '#dc2626'; // Rejected (red)
+      default: return '#4b5563'; // Unknown (gray)
+    }
+  }
+  
+  // Convert to lowercase for case-insensitive comparison if it's a string
+  const statusLower = String(status).toLowerCase();
   
   switch (statusLower) {
     case 'completed':
     case 'done':
     case 'resolved':
     case 'fixed':
+    case '2':
       return '#16a34a';
     case 'in_progress':
     case 'inprogress':
     case 'in progress':
     case 'processing':
     case 'working':
+    case '1':
       return '#eab308';
     case 'received':
     case 'open':
     case 'new':
     case 'pending':
     case 'submitted':
+    case '0':
       return '#2563eb';
     case 'rejected':
     case 'closed':
     case 'denied':
     case 'cancelled':
+    case '3':
       return '#dc2626';
     default:
       console.log('Unknown status:', status);
@@ -66,50 +85,90 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getStatusIcon = (status: Issue['status']) => {
-  switch (status) {
+const getStatusIcon = (status: string | number | undefined) => {
+  if (status === undefined || status === null) return 'alert-circle'; // Default icon for undefined status
+  
+  // Handle numeric status codes
+  if (typeof status === 'number') {
+    switch(status) {
+      case 0: return 'alert-circle'; // Received/Pending
+      case 1: return 'time'; // In Progress
+      case 2: return 'checkmark-circle'; // Completed
+      case 3: return 'close-circle'; // Rejected
+      default: return 'alert-circle'; // Unknown
+    }
+  }
+  
+  // If status is a string
+  switch (String(status).toLowerCase()) {
     case 'completed':
+    case 'done':
+    case '2':
       return 'checkmark-circle';
     case 'in_progress':
+    case 'inprogress':
+    case '1':
       return 'time';
     case 'received':
+    case 'new':
+    case '0':
       return 'alert-circle';
     case 'rejected':
+    case 'closed':
+    case '3':
       return 'close-circle';
     default:
       return 'alert-circle';
   }
 };
 
-const getStatusLabel = (status: string) => {
-  // Convert to lowercase for case-insensitive comparison
-  const statusLower = status?.toLowerCase() || '';
+const getStatusLabel = (status: string | number | undefined) => {
+  // Handle undefined or null status
+  if (status === undefined || status === null) return 'Unknown';
+  
+  // Handle numeric status codes
+  if (typeof status === 'number') {
+    switch(status) {
+      case 0: return 'Pending';
+      case 1: return 'In Progress';
+      case 2: return 'Completed';
+      case 3: return 'Rejected';
+      default: return `Status ${status}`;
+    }
+  }
+  
+  // Convert to lowercase for case-insensitive comparison if it's a string
+  const statusLower = String(status).toLowerCase();
   
   switch (statusLower) {
     case 'completed':
     case 'done':
     case 'resolved':
     case 'fixed':
+    case '2':
       return 'Completed';
     case 'in_progress':
     case 'inprogress':
     case 'in progress':
     case 'processing':
     case 'working':
+    case '1':
       return 'In Progress';
     case 'received':
     case 'open':
     case 'new':
     case 'pending':
     case 'submitted':
+    case '0':
       return 'Pending';
     case 'rejected':
     case 'closed':
     case 'denied':
     case 'cancelled':
+    case '3':
       return 'Rejected';
     default:
-      return status || 'Unknown';
+      return String(status);
   }
 };
 
@@ -134,15 +193,37 @@ const formatDate = (dateString?: string) => {
 };
 
 // Helper function for status-based gradient colors for the title background
-const getStatusGradientColors = (status: Issue['status']): [string, string] => {
-  switch (status) {
+const getStatusGradientColors = (status: string | number | undefined): [string, string] => {
+  if (status === undefined || status === null) return ['$gray600', '$gray500']; // Default for undefined status
+  
+  // Handle numeric status codes
+  if (typeof status === 'number') {
+    switch(status) {
+      case 0: return ['$blue600', '$blue500']; // Received/Pending
+      case 1: return ['$yellow600', '$yellow500']; // In Progress
+      case 2: return ['$green600', '$green500']; // Completed
+      case 3: return ['$red600', '$red500']; // Rejected
+      default: return ['$gray600', '$gray500']; // Unknown
+    }
+  }
+  
+  // String status handling
+  switch (String(status).toLowerCase()) {
     case 'completed':
+    case 'done':
+    case '2':
       return ['$green600', '$green500']; // Green gradient for completed
     case 'in_progress':
+    case 'inprogress':
+    case '1':
       return ['$yellow600', '$yellow500']; // Yellow gradient for in progress
     case 'received':
+    case 'pending':
+    case '0':
       return ['$blue600', '$blue500'];   // Blue gradient for received
     case 'rejected':
+    case 'closed':
+    case '3':
       return ['$red600', '$red500'];     // Red gradient for rejected
     default:
       return ['$gray600', '$gray500']; // Default grey gradient
@@ -299,14 +380,14 @@ export default function TrackScreen() {
               </Text>
             </View>
           ) : (
-            userIssues.map((report) => (
-              <View key={report.id} style={styles.reportContainer}>
+            userIssues.map((report, index) => (
+              <View key={`${report.hexId}-${index}`} style={styles.reportContainer}>
                 <Text style={styles.dateText}>
                   {formatDate(report.createdAt || report.date)}
                 </Text>
                 <View style={styles.divider} />
                 <TouchableOpacity
-                  onPress={() => navigateToIssueDetail(report.id)}
+                  onPress={() => navigateToIssueDetail(report.hexId)}
                   style={styles.reportCard}
                 >
                   {/* Top part: Background based on status */}
@@ -340,7 +421,7 @@ export default function TrackScreen() {
                         { backgroundColor: `${getStatusColor(report.status)}20` }
                       ]}>
                         <Ionicons 
-                          name={getStatusIcon(report.status as any) as any} 
+                          name={getStatusIcon(report.status) as any} 
                           size={14} 
                           color={getStatusColor(report.status)} 
                           style={styles.statusIcon} 

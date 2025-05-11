@@ -107,7 +107,7 @@ app.use('/issue', createProxyMiddleware({
 app.use('/notification', createProxyMiddleware({
   target: NOTIFICATION_SERVICE_URL,
   changeOrigin: true,
-  pathRewrite: { '^/notification': '' },
+  pathRewrite: { '^/notification/notifications': '/notifications' },
   logLevel: 'debug',
   logProvider,
   onProxyReq: (proxyReq, req, res) => {

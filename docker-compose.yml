@@ -7,6 +7,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=docker
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5004
     volumes:
       - ./gateway-service/config:/app/config
     networks:
@@ -15,6 +16,7 @@ services:
     depends_on:
       - user-service
       - issue-service
+      - notification-service
       - postgres
       - rabbitmq
 
@@ -69,10 +71,27 @@ services:
     networks:
       - microservice-network
 
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "5004:5004"
+    environment:
+      - PORT=5004
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=notification_db
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - microservice-network
+
   postgres:
     image: postgres:14-alpine
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_USER=postgres

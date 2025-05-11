@@ -21,7 +21,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
 
 # Port ayarı
-EXPOSE 3000
+EXPOSE 5004
 
 # Production modunda başlat
-CMD ["npm", "run", "start:prod"] 
+CMD ["node", "dist/src/main.js"] 

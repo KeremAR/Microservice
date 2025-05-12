@@ -19,8 +19,19 @@ public class IssueController : ControllerBase
     [HttpPost("report")]
     public async Task<IActionResult> Report([FromBody] CreateIssueRequest request)
     {
-        var issue = await _service.ReportIssueAsync(request);
-        return Ok(issue);
+        try
+        {
+            Console.WriteLine($"Reporting issue with title: {request.Title}");
+            var issue = await _service.ReportIssueAsync(request);
+            Console.WriteLine($"Issue reported successfully with ID: {issue.Id}");
+            return Ok(issue);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reporting issue: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            return StatusCode(500, new { error = "An error occurred while reporting the issue", message = ex.Message });
+        }
     }
 
     [HttpGet("{id}")]

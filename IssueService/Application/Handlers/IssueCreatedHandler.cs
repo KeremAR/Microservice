@@ -19,9 +19,14 @@ public class IssueCreatedHandler : INotificationHandler<IssueCreatedEvent>
         {
             Id = notification.Issue.Id.ToString(),
             Title = notification.Issue.Title,
+            Description = notification.Issue.Description,
+            Category = notification.Issue.Category,
+            PhotoUrl = notification.Issue.PhotoUrl,
             UserId = notification.Issue.UserId,
             DepartmentId = notification.Issue.DepartmentId,
-            Category = notification.Issue.Category,
+            Latitude = notification.Issue.Latitude,
+            Longitude = notification.Issue.Longitude,
+            Status = notification.Issue.Status.ToString(),
             CreatedAt = notification.Issue.CreatedAt
         };
 

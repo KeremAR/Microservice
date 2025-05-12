@@ -156,6 +156,17 @@ Request Body:
 }
 ```
 
+### Gateway Entegrasyonu (2025)
+
+- Bu servis, dış dünyaya doğrudan açılmak yerine sadece API Gateway üzerinden erişilebilecek şekilde yapılandırılmıştır.
+- Tüm notification işlemleri için isteklerinizi gateway üzerinden göndermelisiniz.
+- Gateway üzerinden kullanılabilir endpointler:
+    - **POST** `/notification/notifications` : Bildirim oluşturma
+    - **GET** `/notification/notifications/{userId}` : Kullanıcının bildirimlerini listeleme
+    - **PUT** `/notification/notifications/{notificationId}/read` : Bildirimi okundu olarak işaretleme
+    - **DELETE** `/notification/notifications/{notificationId}` : Bildirimi silme
+- Docker ortamında servis environment değişkeninden portunu alır ve sadece 5004 portunda dinler.
+
 ## Test Kapsamı
 
 - NotificationService: %87.17

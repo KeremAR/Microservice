@@ -7,6 +7,26 @@ const path = require('path');
 const fs = require('fs');
 const morgan = require('morgan');
 const http = require('http');
+const promClient = require('prom-client');
+
+// Create a Registry to register the metrics
+const register = new promClient.Registry();
+// Add a default label which is added to all metrics
+register.setDefaultLabels({
+  app: 'gateway-service'
+});
+// Enable the collection of default metrics
+promClient.collectDefaultMetrics({ register });
+
+// Create custom metrics
+const httpRequestDurationMicroseconds = new promClient.Histogram({
+  name: 'http_request_duration_ms',
+  help: 'Duration of HTTP requests in ms',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [1, 5, 15, 50, 100, 200, 500, 1000, 2000]
+});
+// Register the custom metrics
+register.registerMetric(httpRequestDurationMicroseconds);
 
 // Load environment variables based on NODE_ENV
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -39,8 +59,34 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again after a minute'
 });
 
-// Apply rate limiting to all requests
+// Apply rate limiting to all requests - BEFORE /metrics
 app.use(limiter);
+
+// Expose metrics endpoint for Prometheus - AFTER limiter, BEFORE proxies
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(err);
+  }
+});
+
+// Add request duration metrics middleware - AFTER /metrics
+app.use((req, res, next) => {
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const route = req.originalUrl.split('?')[0];
+    
+    httpRequestDurationMicroseconds
+      .labels(req.method, route, res.statusCode)
+      .observe(duration);
+  });
+  
+  next();
+});
 
 // Set service URLs from environment variables or defaults
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:5001';
@@ -107,7 +153,7 @@ app.use('/issue', createProxyMiddleware({
 app.use('/notification', createProxyMiddleware({
   target: NOTIFICATION_SERVICE_URL,
   changeOrigin: true,
-  pathRewrite: { '^/notification': '' },
+  pathRewrite: { '^/notification/notifications': '/notifications' },
   logLevel: 'debug',
   logProvider,
   onProxyReq: (proxyReq, req, res) => {
@@ -121,6 +167,11 @@ app.use('/notification', createProxyMiddleware({
 // Home route
 app.get('/', (req, res) => {
   res.send('API Gateway is running');
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'UP', timestamp: new Date() });
 });
 
 // Start the server

@@ -3,42 +3,66 @@ version: '3.8'
 services:
   api-gateway:
     build: ./gateway-service
+    container_name: api-gateway
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=docker
+      - USER_SERVICE_URL=http://user-service:8000
+      - DEPARTMENT_SERVICE_URL=http://department-service:8083
+      - ISSUE_SERVICE_URL=http://issue-service:8080
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5004
     volumes:
       - ./gateway-service/config:/app/config
+    expose:
+      - "3000"
     networks:
       - microservice-network
     restart: always
     depends_on:
       - user-service
+      - department-service
       - issue-service
-      - postgres
+      - notification-service
       - rabbitmq
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
-  department_service:
+  department-service:
     build: ./department-service
     container_name: department-service
-  user-service:
-    build: ./user-service2
-    ports:
-      - "5001:8000"
-    depends_on:
-      postgres:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require
       - SPRING_RABBITMQ_HOST=rabbitmq
       - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
+      - SPRING_RABBITMQ_USERNAME=user
+      - SPRING_RABBITMQ_PASSWORD=password
     ports:
       - "8083:8083"
-      # Supabase bağlantı bilgileri (örnek değerler, kendi bilgilerinizle değiştirin)
+    expose:
+      - "8083"
+    depends_on:
+      - rabbitmq
+    networks:
+      - microservice-network
+      
+      
+  user-service:
+    build: ./user-service2
+    container_name: user-service
+    ports:
+      - "5001:8000"
+    expose:
+      - "8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      # Supabase bağlantı bilgileri
       - SUPABASE_DB_HOST=ahrhnlmeimlxttvujmpa.supabase.co
       - SUPABASE_DB_PORT=5432
       - SUPABASE_DB_NAME=postgres  # Supabase'in varsayılan DB adı "postgres"
@@ -54,8 +78,11 @@ services:
 
   issue-service:
     build: ./IssueService
+    container_name: issue-service
     ports:
       - "5003:8080"
+    expose:
+      - "8080"
     depends_on:
       - rabbitmq
     environment:
@@ -68,10 +95,33 @@ services:
     networks:
       - microservice-network
 
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "5004:5004"
+    expose:
+      - "5004"
+    environment:
+      - PORT=5004
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=notification_db
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - microservice-network
+
   postgres:
     image: postgres:14-alpine
+    container_name: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
+    expose:
+      - "5432"
     environment:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_USER=postgres
@@ -80,17 +130,16 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - microservice-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
     ports:
       - "5672:5672"    # AMQP port
       - "15672:15672"  # Management UI port
+    expose:
+      - "5672"
+      - "15672"
     environment:
       - RABBITMQ_DEFAULT_USER=user
       - RABBITMQ_DEFAULT_PASS=password
@@ -105,10 +154,72 @@ services:
       retries: 5
       start_period: 40s
 
+  # Monitoring Services
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--log.level=debug'
+    networks:
+      - microservice-network
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - ./monitoring/grafana/dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - microservice-network
+    depends_on:
+      - prometheus
+    restart: always
+
+  node-exporter:
+    image: prom/node-exporter
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - microservice-network
+    restart: always
+
 volumes:
   postgres_data:
   rabbitmq_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   microservice-network:
-    driver: bridge
+    driver: bridge 

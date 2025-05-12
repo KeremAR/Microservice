@@ -15,33 +15,36 @@ services:
     restart: always
     depends_on:
       - user-service
+      - department-service
       - issue-service
       - notification-service
-      - postgres
       - rabbitmq
 
-  department_service:
+  department-service:
     build: ./department-service
     container_name: department-service
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require
       - SPRING_RABBITMQ_HOST=rabbitmq
       - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
+      - SPRING_RABBITMQ_USERNAME=user
+      - SPRING_RABBITMQ_PASSWORD=password
     ports:
       - "8083:8083"
+    networks:
+      - microservice-network
+    depends_on:
+      - rabbitmq
+
   user-service:
     build: ./user-service2
     ports:
       - "5001:8000"
     depends_on:
-      postgres:
-        condition: service_started
       rabbitmq:
         condition: service_healthy
     environment:
-      # Supabase bağlantı bilgileri (örnek değerler, kendi bilgilerinizle değiştirin)
+      # Supabase bağlantı bilgileri
       - SUPABASE_DB_HOST=ahrhnlmeimlxttvujmpa.supabase.co
       - SUPABASE_DB_PORT=5432
       - SUPABASE_DB_NAME=postgres  # Supabase'in varsayılan DB adı "postgres"

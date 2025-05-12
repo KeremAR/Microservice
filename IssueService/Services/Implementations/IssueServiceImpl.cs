@@ -8,6 +8,7 @@ using MediatR;
 using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
+using Prometheus;
 
 namespace IssueService.Services.Implementations;
 
@@ -15,13 +16,16 @@ public class IssueServiceImpl : IIssueService
 {
     private readonly IIssueRepository _repository;
     private readonly IMediator _mediator;
+    private readonly Counter _issuesCreatedCounter;
 
     public IssueServiceImpl(
         IIssueRepository repository,
-        IMediator mediator)
+        IMediator mediator,
+        Counter issuesCreatedCounter)
     {
         _repository = repository;
         _mediator = mediator;
+        _issuesCreatedCounter = issuesCreatedCounter;
     }
 
     public async Task<Issue> ReportIssueAsync(CreateIssueRequest request)
@@ -39,6 +43,9 @@ public class IssueServiceImpl : IIssueService
 
         // 2) MongoDB'ye kaydet
         await _repository.CreateAsync(issue);
+
+        // Increment the counter after successful creation
+        _issuesCreatedCounter.Inc();
 
         // 3) Domain Event'leri yayınla (in-memory)
         await DispatchEventsAsync(issue);

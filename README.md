@@ -144,3 +144,24 @@ Sorunlar harita üzerinde gösterilir, böylece yoğun şikayet alanları belirl
 - Notification servisi Docker ortamında environment değişkeninden portunu alacak şekilde güncellendi ve sadece 5004 portunda dinleyecek şekilde yapılandırıldı.
 - Dockerfile ve docker-compose ayarları bu yeni yapıya uygun olarak güncellendi.
 - Tüm testler başarıyla geçti ve sistem gateway üzerinden sorunsuz çalışmaktadır.
+
+## Monitoring Setup (Prometheus & Grafana)
+
+This project uses Prometheus for metrics collection and Grafana for visualization.
+
+### Current Status
+
+*   **Prometheus:** Configured to scrape metrics from various services.
+*   **Grafana:** Configured with a Prometheus data source and a main dashboard (`Campus Caution Dashboard`).
+
+### Service Metrics Status
+
+*   **API Gateway (`gateway-service`):** **UP**. Reporting `http_requests_total` (Counter) and `http_request_duration_seconds` (Histogram) to Prometheus. Visualized on the Grafana dashboard.
+*   **User Service (`user-service2`):** **UP**. Reporting standard FastAPI metrics via `prometheus-client`, plus a custom `users_registered_total` (Counter). Visualized on the Grafana dashboard.
+*   **Issue Service (`IssueService`):** **UP**. Reporting standard .NET metrics via `prometheus-net.AspNetCore`, plus a custom `issues_created_total` (Counter). Visualized on the Grafana dashboard.
+*   **Department Service (`department-service`):** **DOWN**. Prometheus reports HTTP 404 when scraping `/actuator/prometheus`. Likely needs Spring Security adjustment to allow unauthenticated access to Actuator endpoints.
+*   **Notification Service (`notification-service`):** **DOWN**. Service fails to start due to database connection issues (`getaddrinfo ENOTFOUND postgres`). Metrics setup is in place (`@willsoto/nestjs-prometheus`) but not currently reporting.
+
+### Grafana Dashboards
+
+*   **`monitoring/grafana/dashboards/campus-caution-dashboard.json`:** The main dashboard showing service health (`up` metric), gateway request rates/durations, user registration counts/rates, and issue creation counts/rates.

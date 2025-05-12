@@ -7,6 +7,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=docker
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5004
     volumes:
       - ./gateway-service/config:/app/config
     networks:
@@ -15,9 +16,21 @@ services:
     depends_on:
       - user-service
       - issue-service
+      - notification-service
       - postgres
       - rabbitmq
 
+  department_service:
+    build: ./department-service
+    container_name: department-service
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+    ports:
+      - "8083:8083"
   user-service:
     build: ./user-service2
     ports:
@@ -58,10 +71,27 @@ services:
     networks:
       - microservice-network
 
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "5004:5004"
+    environment:
+      - PORT=5004
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=notification_db
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - microservice-network
+
   postgres:
     image: postgres:14-alpine
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_USER=postgres

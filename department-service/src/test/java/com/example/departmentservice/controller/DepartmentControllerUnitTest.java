@@ -2,6 +2,7 @@ package com.example.departmentservice.controller;
 
 import com.example.departmentservice.dto.DepartmentDto;
 import com.example.departmentservice.model.Department;
+import com.example.departmentservice.service.DepartmentIssueService;
 import com.example.departmentservice.service.DepartmentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,9 @@ public class DepartmentControllerUnitTest {
 
     @MockBean
     private DepartmentService departmentService;
+
+    @MockBean
+    private DepartmentIssueService departmentIssueService;
 
     @Autowired
     private ObjectMapper objectMapper;

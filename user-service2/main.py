@@ -419,7 +419,8 @@ async def signup(user_data: SignUpSchema):
             "role": role,
             "phone_number": phone_number,
             "is_active": True,
-            "department_id": department_id
+            "department_id": department_id,
+            "provider": "email/password"  # Add provider field for consistency
         }
         
         # Kullanıcıyı Supabase'e kaydet

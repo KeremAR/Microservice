@@ -47,6 +47,7 @@ services:
       - "8083"
     depends_on:
       - rabbitmq
+      - issue-service
     networks:
       - microservice-network
       

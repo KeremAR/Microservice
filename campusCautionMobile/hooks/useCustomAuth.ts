@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { API_BASE_URL, API_ENDPOINTS, getHeaders } from '../constants/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import auth from '@react-native-firebase/auth';
 
 type User = {
   id: string;
@@ -22,6 +23,8 @@ type SignUpParams = {
 type LoginParams = {
   email: string;
   password: string;
+  token?: string;
+  user?: User;
 };
 
 type AuthError = {
@@ -78,11 +81,28 @@ export default function useCustomAuth() {
   };
 
   // Giriş işlemi
-  const login = async ({ email, password }: LoginParams) => {
+  const login = async ({ email, password, token: providedToken, user: providedUser }: LoginParams) => {
     setLoading(true);
     setError(null);
     
     try {
+      // If token is already provided (e.g. from Google Sign-In)
+      if (providedToken && providedUser) {
+        // Save token
+        await AsyncStorage.setItem(TOKEN_KEY, providedToken);
+        setToken(providedToken);
+        
+        // Save user info
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(providedUser));
+        setUser(providedUser);
+        
+        return {
+          user: providedUser,
+          token: providedToken
+        };
+      }
+      
+      // Traditional email/password login
       const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.AUTH.LOGIN}`, {
         method: 'POST',
         headers: getHeaders(),
@@ -153,6 +173,12 @@ export default function useCustomAuth() {
   // Çıkış işlemi
   const logout = async () => {
     try {
+      // Sign out from Firebase if user is signed in
+      const currentUser = auth().currentUser;
+      if (currentUser) {
+        await auth().signOut();
+      }
+      
       await AsyncStorage.removeItem(TOKEN_KEY);
       await AsyncStorage.removeItem(USER_KEY);
       setUser(null);

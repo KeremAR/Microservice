@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "465128947457",
+    "project_id": "user-service-a8931",
+    "storage_bucket": "user-service-a8931.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:465128947457:android:409417f2b06dc19c2e6500",
+        "android_client_info": {
+          "package_name": "com.keremm.campusCautionmobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "465128947457-mnjsm5np6kl9teh2soglqcm7kvuc6vvi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.keremm.campusCautionmobile",
+            "certificate_hash": "ebca97bf26afbeb39f94d217adf5506c6e7a390e"
+          }
+        },
+        {
+          "client_id": "465128947457-psvv6nulvaqccsnqoo2vngea54fmj79u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.keremm.campusCautionmobile",
+            "certificate_hash": "af842b294002839afaea2dd88fe4df3d8a27306f"
+          }
+        },
+        {
+          "client_id": "465128947457-tfc7bantghtsml6gqmklheg3jcvcf11n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRvp3vb3IhP7eUHpZ0Qa4P5zmkLAJX5KA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "465128947457-tfc7bantghtsml6gqmklheg3jcvcf11n.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

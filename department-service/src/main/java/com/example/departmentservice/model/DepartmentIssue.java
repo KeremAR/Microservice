@@ -2,6 +2,7 @@ package com.example.departmentservice.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Entity
 @Table(name = "department_issues")
@@ -13,12 +14,12 @@ public class DepartmentIssue {
     private String title;
     private String description;
     private String category;
-    private String photoUrl;
-    private String userId;
+    private String photo_url;
+    private String user_id;
     private Double latitude;
     private Double longitude;
     private String status;
-    private LocalDateTime createdAt;
+    private LocalDateTime created_at;
 
     public DepartmentIssueId getId() {
         return id;
@@ -52,20 +53,20 @@ public class DepartmentIssue {
         this.category = category;
     }
 
-    public String getPhotoUrl() {
-        return photoUrl;
+    public String getPhoto_url() {
+        return photo_url;
     }
 
-    public void setPhotoUrl(String photoUrl) {
-        this.photoUrl = photoUrl;
+    public void setPhoto_url(String photo_url) {
+        this.photo_url = photo_url;
     }
 
-    public String getUserId() {
-        return userId;
+    public String getUser_id() {
+        return user_id;
     }
 
-    public void setUserId(String userId) {
-        this.userId = userId;
+    public void setUser_id(String user_id) {
+        this.user_id = user_id;
     }
 
     public Double getLatitude() {
@@ -92,11 +93,24 @@ public class DepartmentIssue {
         this.status = status;
     }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+    public LocalDateTime getCreated_at() {
+        return created_at;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
+    public void setCreated_at(LocalDateTime created_at) {
+        this.created_at = created_at;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DepartmentIssue that = (DepartmentIssue) o;
+        return Objects.equals(id, that.id) && Objects.equals(title, that.title) && Objects.equals(description, that.description) && Objects.equals(category, that.category) && Objects.equals(photo_url, that.photo_url) && Objects.equals(user_id, that.user_id) && Objects.equals(latitude, that.latitude) && Objects.equals(longitude, that.longitude) && Objects.equals(status, that.status) && Objects.equals(created_at, that.created_at);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, title, description, category, photo_url, user_id, latitude, longitude, status, created_at);
     }
 }

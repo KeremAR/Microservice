@@ -22,11 +22,7 @@ const GoogleSignInButton = () => {
 
   // Initialize Google Sign-In when component mounts
   useEffect(() => {
-    // Firebase is automatically initialized from google-services.json
-    // We don't need to call initializeApp() directly
-    console.log('Firebase apps:', firebase.apps.length);
-    
-    // Configure Google Sign-In
+    // Configure Google Sign-In according to documentation
     GoogleSignin.configure({
       webClientId: WEB_CLIENT_ID,
       offlineAccess: false,
@@ -41,7 +37,8 @@ const GoogleSignInButton = () => {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       
       // Sign in with Google
-      await GoogleSignin.signIn();
+      const signInResult = await GoogleSignin.signIn();
+      
       // Get tokens separately (this works with the latest version of the library)
       const { idToken } = await GoogleSignin.getTokens();
       

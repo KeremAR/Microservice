@@ -17,10 +17,42 @@ from fastapi import Depends, Header
 import jwt
 from typing import Optional, Dict, Any
 from supabase import create_client, Client
+from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
+import time
 
 load_dotenv()
 
 app = FastAPI(title="User Service")
+
+# Add prometheus metrics
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
+
+# Define Prometheus metrics
+REQUEST_COUNT = Counter('user_service_request_count', 'Total requests to User Service', ['method', 'endpoint', 'status_code'])
+REQUEST_LATENCY = Histogram('user_service_request_latency_seconds', 'Request latency in seconds', ['method', 'endpoint'])
+AUTH_SUCCESS = Counter('user_service_auth_success', 'Successfully authenticated requests', ['method', 'endpoint'])
+AUTH_FAILURE = Counter('user_service_auth_failure', 'Failed authentication attempts', ['method', 'endpoint'])
+DB_CONNECTIONS = Gauge('user_service_db_connections', 'Number of DB connections')
+USERS_REGISTERED_TOTAL = Counter('users_registered_total', 'Total number of users registered')
+
+# Middleware to track request metrics
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    start_time = time.time()
+    
+    response = await call_next(request)
+    
+    request_path = request.url.path
+    request_method = request.method
+    status_code = response.status_code
+    
+    # Skip tracking metrics endpoints
+    if not request_path.startswith("/metrics"):
+        REQUEST_COUNT.labels(request_method, request_path, status_code).inc()
+        REQUEST_LATENCY.labels(request_method, request_path).observe(time.time() - start_time)
+    
+    return response
 
 # CORS ayarları
 app.add_middleware(
@@ -397,6 +429,7 @@ async def signup(user_data: SignUpSchema):
         if supabase_result:
             print(f"User successfully saved to Supabase: {email}")
             supabase_saved = True
+            USERS_REGISTERED_TOTAL.inc()
         else:
             print(f"WARNING: Failed to save user to Supabase, continuing with Firebase only: {email}")
             # Firebase'de kullanıcı oluşturuldu, ancak Supabase'e kaydedilemedi

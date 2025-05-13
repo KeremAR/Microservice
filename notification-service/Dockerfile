@@ -24,4 +24,4 @@ COPY package*.json ./
 EXPOSE 5004
 
 # Production modunda başlat
-CMD ["node", "dist/src/main.js"] 
+CMD ["node", "dist/main.js"]

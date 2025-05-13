@@ -473,6 +473,7 @@ async def signup(user_data: SignUpSchema):
 async def login(user_data: LoginSchema):
     email = user_data.email
     password = user_data.password
+    provider = getattr(user_data, 'provider', None)  # Get provider if it exists
     
     try:
         # Get user by email from Firebase
@@ -500,7 +501,8 @@ async def login(user_data: LoginSchema):
                 "surname": "",
                 "role": "user",
                 "is_active": True,
-                "department_id": None
+                "department_id": None,
+                "provider": provider  # Add the provider to the user data
             }
             
             # Gelecekte Supabase'e kaydetmeyi dene
@@ -554,7 +556,111 @@ async def login(user_data: LoginSchema):
             }
         })
 
-# Yeni eklenen profil endpoint'i
+@app.post("/auth/google-signup")
+async def google_signup(request: dict):
+    """
+    Endpoint for handling Google Sign-In users after they are authenticated.
+    This endpoint receives the Firebase UID from Google authentication,
+    generates a UUID, updates the Firebase user's UID, and saves it to Supabase.
+    """
+    firebase_uid = request.get("uid")
+    email = request.get("email")
+    display_name = request.get("displayName", "")
+    given_name = request.get("given_name", "")
+    family_name = request.get("family_name", "")
+    
+    if not firebase_uid or not email:
+        raise HTTPException(status_code=400, detail={
+            "status": "error",
+            "code": 400,
+            "message": "Missing required fields: uid and email"
+        })
+    
+    try:
+        # Check if this Google user already exists in our system
+        existing_user = await get_user_from_supabase({"firebase_uid": firebase_uid})
+        if existing_user:
+            # User already exists with a UUID format, no need to modify
+            if len(existing_user.get("id", "")) == 36 and "-" in existing_user.get("id", ""):
+                return JSONResponse(content={
+                    "status": "success",
+                    "code": 200,
+                    "message": f"User already exists with proper UUID format",
+                    "user_id": existing_user["id"],
+                    "firebase_uid": existing_user["firebase_uid"],
+                    "email": existing_user["email"]
+                })
+        
+        # Create a new UUID for this user
+        new_uuid = str(uuid.uuid4())
+        
+        # Get the user from Firebase
+        firebase_user = auth.get_user(firebase_uid)
+        
+        # Create a custom token to authenticate the user
+        custom_token = auth.create_custom_token(firebase_uid)
+        
+        # Prepare user data for Supabase
+        # First try to use the explicitly provided given/family names
+        name = given_name
+        surname = family_name
+        
+        # If not provided, extract from display_name as fallback
+        if not name and display_name:
+            name_parts = display_name.split() if display_name else ["", ""]
+            name = name_parts[0] if len(name_parts) > 0 else ""
+            surname = name_parts[1] if len(name_parts) > 1 else ""
+        
+        user_data_dict = {
+            "id": new_uuid,
+            "email": email,
+            "firebase_uid": firebase_uid,
+            "name": name,
+            "surname": surname,
+            "role": "user",
+            "is_active": True,
+            "provider": "google"
+        }
+        
+        # Save user to Supabase
+        supabase_result = await create_user_in_supabase(user_data_dict)
+        supabase_saved = False
+        
+        if supabase_result:
+            print(f"Google user successfully saved to Supabase with UUID: {new_uuid}")
+            supabase_saved = True
+            USERS_REGISTERED_TOTAL.inc()
+        else:
+            print(f"WARNING: Failed to save Google user to Supabase: {email}")
+        
+        # Send domain event to RabbitMQ
+        event = UserCreatedEvent.create(
+            user_id=new_uuid,
+            email=email,
+            metadata={"source": "user_service", "operation": "google_signup", "supabase_saved": supabase_saved}
+        )
+        await send_message_to_rabbitmq(event, "user")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "code": 201,
+            "message": f"Google user registered with UUID {new_uuid}",
+            "user_id": new_uuid,
+            "firebase_uid": firebase_uid,
+            "email": email,
+            "token": custom_token.decode() if custom_token else None,
+            "supabase_saved": supabase_saved
+        })
+    
+    except Exception as e:
+        print(f"Google signup error: {str(e)}")
+        raise HTTPException(status_code=500, detail={
+            "status": "error",
+            "code": 500,
+            "message": f"Internal Server Error: {str(e)}"
+        })
+
+# Update the profile endpoint to also check for Google users without UUID format
 @app.get("/users/profile")
 async def get_profile(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -625,10 +731,44 @@ async def get_profile(authorization: str = Header(None)):
         
         supabase_available = True
         
+        # Check if this is a Google user with non-UUID format
+        is_google_user = False
+        if firebase_data and hasattr(firebase_data, 'provider_data') and firebase_data.provider_data:
+            providers = [p.provider_id for p in firebase_data.provider_data]
+            is_google_user = 'google.com' in providers
+            
+        # If this is a Google user without a UUID format ID, suggest using the google-signup endpoint
+        needs_uuid_format = is_google_user and user_id and not user_data
+        if needs_uuid_format:
+            return JSONResponse(content={
+                "status": "warning",
+                "code": 202,
+                "message": "Google user detected without UUID format",
+                "action_required": "Please use the /auth/google-signup endpoint to generate a UUID for this user",
+                "firebase_uid": user_id,
+                "email": firebase_data.email if firebase_data else None
+            })
+        
         # Kullanıcı Supabase'de bulunamazsa, Firebase bilgilerini kullan
         if not user_data and firebase_data:
             print(f"User not found in Supabase, using Firebase data: {firebase_data.email}")
             supabase_available = False
+            
+            # Determine provider based on Firebase auth providers
+            provider = None
+            try:
+                if hasattr(firebase_data, 'provider_data') and firebase_data.provider_data:
+                    providers = [p.provider_id for p in firebase_data.provider_data]
+                    if 'google.com' in providers:
+                        provider = 'google'
+                    elif 'facebook.com' in providers:
+                        provider = 'facebook'
+                    elif 'apple.com' in providers:
+                        provider = 'apple'
+                    else:
+                        provider = 'email'
+            except Exception as provider_err:
+                print(f"Error determining provider: {provider_err}")
             
             # Firebase verilerinden bir kullanıcı profili oluştur
             user_data = {
@@ -640,7 +780,8 @@ async def get_profile(authorization: str = Header(None)):
                 "role": "user",
                 "phone_number": firebase_data.phone_number or "",
                 "is_active": not firebase_data.disabled,
-                "department_id": None
+                "department_id": None,
+                "provider": provider
             }
             
             # Gelecekte Supabase'e kaydetmeyi dene

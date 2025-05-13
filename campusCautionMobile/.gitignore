@@ -37,3 +37,5 @@ constants/local.env.ts
 *.tsbuildinfo
 
 app-example
+android/
+ios/

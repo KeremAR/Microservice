@@ -6,11 +6,27 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import firebase from '@react-native-firebase/app';
+
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '@/contexts/AuthContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Initialize Firebase App at the module level
+if (firebase.apps.length === 0) {
+  try {
+    // @ts-ignore - Parameterless call is correct for default app auto-init
+    firebase.initializeApp(); // For the default app
+    console.log('[Firebase] App initialized successfully in app/_layout.tsx (top level).');
+    console.log('[Firebase] Existing apps after init:', firebase.apps.map(app => app.name).join(', ') || 'None');
+  } catch (e: any) {
+    console.error('[Firebase] Error initializing app in app/_layout.tsx (top level):', e.message, e);
+  }
+} else {
+  console.log('[Firebase] App already initialized. Existing apps:', firebase.apps.map(app => app.name).join(', ') || 'None');
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -19,6 +35,7 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    // Firebase initialization is now done at the top level of this module.
     if (loaded) {
       SplashScreen.hideAsync();
     }

@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
   AUTH: {
     SIGNUP: '/user/auth/signup',
     LOGIN: '/user/auth/login',
+    GOOGLE_SIGNUP: '/user/auth/google-signup',
   },
   USERS: {
     PROFILE: '/user/users/profile',

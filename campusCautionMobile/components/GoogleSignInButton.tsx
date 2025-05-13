@@ -11,9 +11,27 @@ import auth from '@react-native-firebase/auth';
 import { useAuth } from '../contexts/AuthContext';
 import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Buffer } from 'buffer'; // Import Buffer for base64 decoding
 
 // Initialize Google Sign-In
 const WEB_CLIENT_ID = '465128947457-tfc7bantghtsml6gqmklheg3jcvcf11n';
+
+// Base64 decode function for JWT tokens (works in React Native)
+const decodeJwtPayload = (token: string): any => {
+  try {
+    const base64Payload = token.split('.')[1];
+    const normalizedBase64 = base64Payload.replace(/-/g, '+').replace(/_/g, '/');
+    const paddedBase64 = normalizedBase64.padEnd(
+      normalizedBase64.length + (4 - (normalizedBase64.length % 4)) % 4, 
+      '='
+    );
+    const jsonPayload = Buffer.from(paddedBase64, 'base64').toString('utf8');
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('Failed to decode JWT:', error);
+    return {};
+  }
+};
 
 const GoogleSignInButton = () => {
   const { login } = useAuth();
@@ -48,6 +66,22 @@ const GoogleSignInButton = () => {
         setLoading(false);
         return;
       }
+      
+      // Parse the ID token to extract user info
+      // Note: This is a simple way to decode the token without verification
+      // The actual verification is done by Firebase
+      const decodedToken = decodeJwtPayload(idToken);
+      console.log('Decoded Google ID token:', decodedToken);
+      
+      // Extract user info from the token
+      const googleUserInfo = {
+        email: decodedToken.email,
+        givenName: decodedToken.given_name,
+        familyName: decodedToken.family_name,
+        name: decodedToken.name,
+        picture: decodedToken.picture
+      };
+      
       console.log('[GoogleSignInButton] Checking Firebase apps before auth call. All apps:', firebase.apps.map(app => app.name).join(', ') || 'No apps found');
       if (firebase.apps.length > 0) {
         try {
@@ -79,8 +113,8 @@ const GoogleSignInButton = () => {
           user: {
             id: firebaseUser.uid,
             email: firebaseUser.email || '',
-            name: firebaseUser.displayName?.split(' ')[0] || '',
-            surname: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
+            name: googleUserInfo.givenName || firebaseUser.displayName?.split(' ')[0] || '',
+            surname: googleUserInfo.familyName || firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
             role: 'user' // Default role, will be updated when profile is fetched
           }
         });

@@ -14,19 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "465128947457-mnjsm5np6kl9teh2soglqcm7kvuc6vvi.apps.googleusercontent.com",
+          "client_id": "465128947457-e4h7s22uj10n2ah1v71dgvoq5971i0r4.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.keremm.campusCautionmobile",
-            "certificate_hash": "ebca97bf26afbeb39f94d217adf5506c6e7a390e"
-          }
-        },
-        {
-          "client_id": "465128947457-psvv6nulvaqccsnqoo2vngea54fmj79u.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.keremm.campusCautionmobile",
-            "certificate_hash": "af842b294002839afaea2dd88fe4df3d8a27306f"
+            "certificate_hash": "57795e3e9251e4d2a5960b7f5364ca7446d9b399"
           }
         },
         {

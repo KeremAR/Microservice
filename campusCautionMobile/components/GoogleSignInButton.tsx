@@ -13,7 +13,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 // Initialize Google Sign-In
-const WEB_CLIENT_ID = '465128947457-tfc7bantghtsml6gqmklheg3jcvcf11n.apps.googleusercontent.com';
+const WEB_CLIENT_ID = '465128947457-tfc7bantghtsml6gqmklheg3jcvcf11n';
 
 const GoogleSignInButton = () => {
   const { login } = useAuth();
@@ -28,6 +28,7 @@ const GoogleSignInButton = () => {
       offlineAccess: false,
     });
     console.log('Google Sign-In configured in component');
+    
   }, []);
 
   const signInWithGoogle = async () => {
@@ -41,13 +42,23 @@ const GoogleSignInButton = () => {
       
       // Get tokens separately (this works with the latest version of the library)
       const { idToken } = await GoogleSignin.getTokens();
-      
+      console.log('idToken', idToken);
       if (!idToken) {
         Alert.alert("Giriş Hatası", "Google'dan kimlik bilgisi (ID Token) alınamadı.");
         setLoading(false);
         return;
       }
-      
+      console.log('[GoogleSignInButton] Checking Firebase apps before auth call. All apps:', firebase.apps.map(app => app.name).join(', ') || 'No apps found');
+      if (firebase.apps.length > 0) {
+        try {
+          const defaultFirebaseApp = firebase.app(); // This attempts to get the [DEFAULT] app
+          console.log(`[GoogleSignInButton] Default Firebase app found: Name: ${defaultFirebaseApp.name}, AppID: ${defaultFirebaseApp.options.appId}`);
+        } catch (e: any) {
+          console.error('[GoogleSignInButton] Error getting default Firebase app instance:', e.message, e);
+        }
+      } else {
+          console.warn('[GoogleSignInButton] firebase.apps array is empty before attempting Firebase Auth!');
+      }
       // Create Firebase credential with Google ID token
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
       

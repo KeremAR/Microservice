@@ -8,6 +8,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       # Supabase bağlantı bilgileri
       - SUPABASE_DB_HOST=your-supabase-db-host.supabase.co
@@ -15,8 +17,24 @@ services:
       - SUPABASE_DB_NAME=postgres
       - SUPABASE_DB_USER=postgres
       - SUPABASE_DB_PASSWORD=your-password
+      # Redis connection
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - .:/app
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -37,3 +55,4 @@ services:
 
 volumes:
   rabbitmq_data: 
+  redis_data: 

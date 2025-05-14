@@ -19,10 +19,100 @@ from typing import Optional, Dict, Any
 from supabase import create_client, Client
 from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
 import time
+import redis
+from functools import wraps
 
 load_dotenv()
 
 app = FastAPI(title="User Service")
+
+# Initialize Redis client
+redis_host = os.getenv("REDIS_HOST", "redis")  # Default to 'redis' for Docker Compose
+redis_port = int(os.getenv("REDIS_PORT", 6379))
+redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+
+# Redis connection check
+try:
+    redis_client.ping()
+    print(f"Successfully connected to Redis at {redis_host}:{redis_port}")
+except redis.ConnectionError as e:
+    print(f"Failed to connect to Redis: {e}")
+    # Continue without Redis, service can still function
+
+# Redis cache decorator for endpoints
+def cache_response(expiration_time=60):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Create a cache key from function name and arguments
+            # For endpoints with authorization headers, we'll use them in the key
+            authorization = kwargs.get('authorization')
+            if authorization:
+                cache_key = f"{func.__name__}:{authorization}"
+            else:
+                # For endpoints without auth, create key from path and query params if any
+                request = kwargs.get('request', args[0] if args else None)
+                if request and hasattr(request, 'url'):
+                    cache_key = f"{func.__name__}:{request.url.path}{request.url.query}"
+                else:
+                    # Fallback to just function name if we can't identify a more specific key
+                    cache_key = f"{func.__name__}"
+            
+            request_start_time = time.time()
+            
+            # Try to get from cache
+            try:
+                cached_data = redis_client.get(cache_key)
+                if cached_data:
+                    cache_time = time.time() - request_start_time
+                    print(f"[Redis Cache] HIT for key: {cache_key} - Response time: {cache_time*1000:.2f}ms")
+                    return JSONResponse(content=json.loads(cached_data))
+                print(f"[Redis Cache] MISS for key: {cache_key}")
+            except Exception as e:
+                print(f"[Redis Cache] Error getting from cache: {e}")
+                # Continue execution even if cache retrieval fails
+            
+            # Execute the original function and time it
+            function_start_time = time.time()
+            response = await func(*args, **kwargs)
+            function_time = time.time() - function_start_time
+            total_time = time.time() - request_start_time
+            
+            print(f"[Redis Cache] Function execution time: {function_time*1000:.2f}ms, Total processing time: {total_time*1000:.2f}ms")
+            
+            # Only cache successful responses
+            if hasattr(response, 'status_code') and 200 <= response.status_code < 300:
+                try:
+                    # Extract the response data
+                    if hasattr(response, 'body'):
+                        data_to_cache = response.body.decode('utf-8')
+                    else:
+                        # If it's a JSONResponse, get the json body
+                        data_to_cache = json.dumps(response.body) if hasattr(response, 'json') else json.dumps(response.dict())
+                    
+                    # Store in Redis with expiration
+                    redis_client.setex(cache_key, expiration_time, data_to_cache)
+                    print(f"[Redis Cache] Stored key: {cache_key}")
+                except Exception as e:
+                    print(f"[Redis Cache] Error setting cache: {e}")
+            
+            return response
+        return wrapper
+    return decorator
+
+# Function to invalidate cache based on pattern
+def invalidate_cache(pattern="*"):
+    try:
+        # Find all keys matching the pattern
+        keys = redis_client.keys(pattern)
+        if keys:
+            # Delete all matching keys
+            redis_client.delete(*keys)
+            print(f"[Redis Cache] Invalidated {len(keys)} keys matching pattern: {pattern}")
+        else:
+            print(f"[Redis Cache] No keys found matching pattern: {pattern}")
+    except Exception as e:
+        print(f"[Redis Cache] Error invalidating cache: {e}")
 
 # Add prometheus metrics
 metrics_app = make_asgi_app()
@@ -49,8 +139,13 @@ async def metrics_middleware(request, call_next):
     
     # Skip tracking metrics endpoints
     if not request_path.startswith("/metrics"):
+        duration = time.time() - start_time
         REQUEST_COUNT.labels(request_method, request_path, status_code).inc()
-        REQUEST_LATENCY.labels(request_method, request_path).observe(time.time() - start_time)
+        REQUEST_LATENCY.labels(request_method, request_path).observe(duration)
+        
+        # Log detailed timing for GET profile requests to compare cached vs non-cached
+        if request_method == "GET" and request_path == "/users/profile":
+            print(f"[Performance] {request_method} {request_path} - Total response time: {duration*1000:.2f}ms, Status: {status_code}")
     
     return response
 
@@ -444,6 +539,9 @@ async def signup(user_data: SignUpSchema):
         )
         await send_message_to_rabbitmq(event, "user")
         
+        # Invalidate any cached user data that might exist
+        invalidate_cache(pattern="get_profile:*")
+        
         return JSONResponse(content={
             "status": "success",
             "code": 201,
@@ -531,6 +629,9 @@ async def login(user_data: LoginSchema):
         )
         await send_message_to_rabbitmq(event, "user")
         
+        # Invalidate any cached user data for this specific user
+        invalidate_cache(pattern=f"get_profile:*{firebase_user.uid}*")
+        
         return JSONResponse(content={
             "status": "success",
             "code": 200,
@@ -594,6 +695,7 @@ async def google_signup(request: dict):
         
         # Create a new UUID for this user
         new_uuid = str(uuid.uuid4())
+        print(f"Generated new UUID for Google user {email}: {new_uuid}")
         
         # Get the user from Firebase
         firebase_user = auth.get_user(firebase_uid)
@@ -642,6 +744,10 @@ async def google_signup(request: dict):
         )
         await send_message_to_rabbitmq(event, "user")
         
+        # Invalidate any cached user data
+        invalidate_cache(pattern=f"get_profile:*{firebase_uid}*")
+        invalidate_cache(pattern=f"get_profile:*{new_uuid}*")
+        
         return JSONResponse(content={
             "status": "success",
             "code": 201,
@@ -663,6 +769,7 @@ async def google_signup(request: dict):
 
 # Update the profile endpoint to also check for Google users without UUID format
 @app.get("/users/profile")
+@cache_response(expiration_time=300)  # Cache for 5 minutes
 async def get_profile(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail={

@@ -50,6 +50,7 @@ services:
       - "8083"
     depends_on:
       - rabbitmq
+      - issue-service
     networks:
       - microservice-network
       
@@ -92,7 +93,6 @@ services:
       - "8080"
     depends_on:
       - rabbitmq
-      - redis
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - MongoDB__ConnectionString=mongodb+srv://cefakarberkay:berkay01@campuscation.jtmagbt.mongodb.net/?retryWrites=true&w=majority&appName=CampusCation

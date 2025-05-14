@@ -133,4 +133,24 @@ try {
     // Don't throw the exception, so the application can still start even if RabbitMQ is unavailable
 }
 
+// Force RabbitMQProducer initialization to ensure queue is created at startup
+try 
+{
+    Console.WriteLine("🔄 Initializing RabbitMQProducer to create queue...");
+    var rabbitProducer = app.Services.GetRequiredService<IRabbitMQProducer>();
+    Console.WriteLine("✨ RabbitMQProducer initialized!");
+    
+    // Optional: Send a test message
+    /*
+    var testMessage = new { Message = "Test message at startup" };
+    rabbitProducer.PublishIssueCreated(testMessage);
+    Console.WriteLine("✨ Test message published to queue");
+    */
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Error initializing RabbitMQProducer: {ex.Message}");
+    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+}
+
 app.Run();

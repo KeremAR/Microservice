@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,18 @@ import {
   StatusBar,
   Platform,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Link, useRouter, useFocusEffect } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { mockIssues, mockNotifications, mockStats, campusMapRegion } from '../../data/mockData';
 import OSMMap from '../../components/OSMMap';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserProfile, getIssues, getUserIssues, getStats } from '../../services/api';
+import { getUserProfile, getUserIssues, getIssues } from '../../services/api';
+import { Stack } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Kullanıcı profili için tip tanımlaması
 interface UserProfile {
@@ -196,21 +200,61 @@ export default function HomeScreen() {
     setIsLoadingIssues(true);
     
     try {
-      // İstatistikleri hesaplamak için sadece kullanıcının sorunlarını getirelim
+      // Kullanıcının sorunlarını getirelim (bunlara tıklanabilecek)
       const userIssuesData = await getUserIssues(token);
       console.log('User issues fetched:', userIssuesData.length);
       
-      if (userIssuesData && userIssuesData.length > 0) {
-        console.log('Sample user issue data structure:', JSON.stringify(userIssuesData[0], null, 2));
-        console.log('User issues status values:', userIssuesData.map((issue: Issue) => `${issue.title}: ${issue.status}`));
+      // Tüm sorunları da getirelim
+      const allIssuesData = await getIssues(token);
+      console.log('All issues fetched:', allIssuesData.length);
+      
+      // Her iki listedeki öğeleri daha detaylı logla
+      console.log('First user issue (if exists):', userIssuesData.length > 0 ? {
+        id: userIssuesData[0].id,
+        hexId: userIssuesData[0].hexId,
+        title: userIssuesData[0].title
+      } : 'No user issues');
+      
+      console.log('First all issue (if exists):', allIssuesData.length > 0 ? {
+        id: allIssuesData[0].id,
+        hexId: allIssuesData[0].hexId,
+        title: allIssuesData[0].title
+      } : 'No issues');
+      
+      // Kullanıcıya ait olmayan sorunları belirle (debugging için)
+      if (userIssuesData.length > 0 && allIssuesData.length > 0) {
+        console.log('Checking for non-user issues:');
+        
+        // Tüm sorunlardaki ID'leri ve kullanıcı sorunlarındaki ID'leri karşılaştır
+        const userIssueIds = userIssuesData.map((ui: Issue) => ui.hexId || (ui.id ? ui.id.toString() : ''));
+        const nonUserIssues = allIssuesData.filter((ai: Issue) => {
+          const allIssueId = ai.hexId || (ai.id ? ai.id.toString() : '');
+          return !userIssueIds.includes(allIssueId);
+        });
+        
+        console.log(`Non-user issues count: ${nonUserIssues.length} / ${allIssuesData.length}`);
+        
+        if (nonUserIssues.length > 0) {
+          console.log('Example non-user issue:', {
+            id: nonUserIssues[0].id,
+            hexId: nonUserIssues[0].hexId,
+            title: nonUserIssues[0].title
+          });
+        }
       }
       
-      // Kullanıcıya ait sorunları listeleyip, tüm istatistikleri hesaplayalım
-      setAllIssues(userIssuesData);
-      setUserIssues(userIssuesData);
+      // Kullanıcının sorunlarına açık bir belirteç ekle
+      const enhancedUserIssues = userIssuesData.map((issue: Issue) => ({
+        ...issue,
+        isUserIssue: true  // Kullanıcı sorunlarını belirgin şekilde işaretle
+      }));
+      
+      // Kullanıcı sorunlarını ve tüm sorunları sakla
+      setUserIssues(enhancedUserIssues);
+      setAllIssues(allIssuesData);
       
       // Calculate stats directly from user issues data
-      calculateStats(userIssuesData);
+      calculateStats(enhancedUserIssues);
       
     } catch (err: any) {
       console.error('Failed to fetch issues:', err);
@@ -262,60 +306,245 @@ export default function HomeScreen() {
     router.push(`/issue-detail?id=${issueId}`);
   };
   
-  // Process markers for OSMMap from real issues data
-  const mapMarkers = allIssues
+  // Process markers for OSMMap from issues data
+  
+  // Önce aynı koordinatlardaki sorunları gruplayalım
+  const coordinateGroups = new Map();
+  
+  // Kullanıcı sorunlarını önce işle
+  userIssues
     .filter(issue => {
-      // Check if status is not completed
+      // Check if status is pending (0) or in progress (1)
       const statusStr = String(issue.status || '').toLowerCase();
-      const isCompleted = statusStr === 'completed' || 
-                          statusStr === 'done' || 
-                          statusStr === '2' || 
-                          issue.status === 2;
+      const isPendingOrInProgress = statusStr === 'pending' || 
+                           statusStr === 'in_progress' || 
+                           statusStr === 'new' ||
+                           statusStr === 'received' ||
+                           statusStr === '0' || 
+                           statusStr === '1' ||
+                           issue.status === 0 ||
+                           issue.status === 1;
       
-      // Check if coordinates are valid (not 0,0 and not undefined)
+      // Check if coordinates are valid
       const hasValidCoords = 
         issue.latitude !== undefined && 
         issue.longitude !== undefined && 
         issue.latitude !== 0 && 
         issue.longitude !== 0;
       
-      // Debug logs
-      console.log('Processing issue for map:', {
-        title: issue.title,
-        status: issue.status,
-        hasLatitude: !!issue.latitude,
-        hasLongitude: !!issue.longitude,
-        latitude: issue.latitude,
-        longitude: issue.longitude,
-        hasValidCoords: hasValidCoords,
-        isCompleted: isCompleted,
-        willShow: !isCompleted && hasValidCoords
+      return isPendingOrInProgress && hasValidCoords;
+    })
+    .forEach(issue => {
+      // Koordinat anahtarı oluştur
+      const coordKey = `${issue.latitude?.toFixed(5)},${issue.longitude?.toFixed(5)}`;
+      
+      // Bu koordinattaki sorun sayısını güncelle
+      if (!coordinateGroups.has(coordKey)) {
+        coordinateGroups.set(coordKey, { count: 0, hasUserIssue: false });
+      }
+      
+      const group = coordinateGroups.get(coordKey);
+      group.count++;
+      group.hasUserIssue = true;
+    });
+  
+  // Diğer kullanıcıların sorunlarını işle
+  allIssues
+    .filter(issue => {
+      // Eğer kullanıcının sorunuysa ekleme
+      const isUserIssue = userIssues.some(userIssue => {
+        const userIssueId = userIssue.hexId || (userIssue.id ? userIssue.id.toString() : '');
+        const currentIssueId = issue.hexId || (issue.id ? issue.id.toString() : '');
+        return userIssueId === currentIssueId;
       });
       
-      return !isCompleted && hasValidCoords;
+      // Check if status is in progress (1) - ONLY in progress for other users
+      const statusStr = String(issue.status || '').toLowerCase();
+      const isInProgress = statusStr === 'in_progress' || 
+                           statusStr === 'inprogress' ||
+                           statusStr === 'in progress' ||
+                           statusStr === 'processing' ||
+                           statusStr === '1' ||
+                           issue.status === 1;
+      
+      // Check if coordinates are valid
+      const hasValidCoords = 
+        issue.latitude !== undefined && 
+        issue.longitude !== undefined && 
+        issue.latitude !== 0 && 
+        issue.longitude !== 0;
+      
+      return !isUserIssue && isInProgress && hasValidCoords;
     })
-    .map(issue => {
+    .forEach(issue => {
+      // Koordinat anahtarı oluştur
+      const coordKey = `${issue.latitude?.toFixed(5)},${issue.longitude?.toFixed(5)}`;
+      
+      // Bu koordinattaki sorun sayısını güncelle
+      if (!coordinateGroups.has(coordKey)) {
+        coordinateGroups.set(coordKey, { count: 0, hasUserIssue: false });
+      }
+      
+      coordinateGroups.get(coordKey).count++;
+    });
+  
+  console.log('Coordinate groups:', Object.fromEntries(coordinateGroups));
+  
+  // Şimdi kullanıcı sorunları için markerları oluştur (bunlar her zaman daha üstte görünsün)
+  const userMarkers = userIssues
+    .filter(issue => {
+      // Check if status is pending (0) or in progress (1)
+      const statusStr = String(issue.status || '').toLowerCase();
+      const isPendingOrInProgress = statusStr === 'pending' || 
+                           statusStr === 'in_progress' || 
+                           statusStr === 'new' ||
+                           statusStr === 'received' ||
+                           statusStr === '0' || 
+                           statusStr === '1' ||
+                           issue.status === 0 ||
+                           issue.status === 1;
+      
+      // Check if coordinates are valid
+      const hasValidCoords = 
+        issue.latitude !== undefined && 
+        issue.longitude !== undefined && 
+        issue.latitude !== 0 && 
+        issue.longitude !== 0;
+      
+      return isPendingOrInProgress && hasValidCoords;
+    })
+    .map((issue, index) => {
       const issueId = issue.hexId || (issue.id ? issue.id.toString() : '');
-      console.log(`Adding marker for issue: ${issue.title}, ID: ${issueId}, Coords: ${issue.latitude},${issue.longitude}`);
+      
+      // Koordinat anahtarı oluştur
+      const coordKey = `${issue.latitude?.toFixed(5)},${issue.longitude?.toFixed(5)}`;
+      const group = coordinateGroups.get(coordKey);
+      
+      // Aynı koordinatta birden fazla sorun varsa, küçük kaydırmalar ekle
+      let adjustedLatitude = issue.latitude || 0;
+      let adjustedLongitude = issue.longitude || 0;
+      
+      if (group && group.count > 1) {
+        // Her sorun için hafif bir kaydırma ekle (0.0001 derece yaklaşık 10 metre)
+        // Kullanıcının sorunlarını hafif yukarı-sağa kaydır
+        const offsetMultiplier = 0.00005; // Daha küçük bir kaydırma değeri
+        adjustedLatitude += offsetMultiplier;
+        adjustedLongitude += offsetMultiplier;
+      }
       
       // Get status color for the marker
       const statusColor = (() => {
-        if (issue.status === 1) return '#F59E0B'; // In Progress - Yellow
-        return '#3B82F6'; // Default - Blue (for new/pending)
+        // Status kontrolü
+        const statusStr = String(issue.status || '').toLowerCase();
+        const isInProgress = statusStr === 'in_progress' || 
+                            statusStr === 'inprogress' ||
+                            statusStr === 'in progress' ||
+                            statusStr === 'processing' ||
+                            statusStr === '1' ||
+                            issue.status === 1;
+        
+        if (isInProgress) return '#F59E0B'; // In Progress - Sarı
+        return '#3B82F6'; // Pending - Mavi
+      })();
+
+      // Z-index değerini belirle
+      // In Progress sorunları daha üstte, Pending sorunlarını onun altında göster
+      const zIndexValue = (() => {
+        const statusStr = String(issue.status || '').toLowerCase();
+        const isInProgress = statusStr === 'in_progress' || 
+                            statusStr === 'inprogress' ||
+                            statusStr === 'in progress' ||
+                            statusStr === 'processing' ||
+                            statusStr === '1' ||
+                            issue.status === 1;
+        
+        return isInProgress ? 2000 : 1000; // In Progress için 2000, Pending için 1000
       })();
 
       return {
         id: issueId,
         coordinates: {
-          latitude: issue.latitude || 0,
-          longitude: issue.longitude || 0,
+          latitude: adjustedLatitude,
+          longitude: adjustedLongitude,
         },
         title: issue.title,
         description: issue.description,
         color: statusColor,
-        isUserIssue: true
+        isUserIssue: true, // Kullanıcı sorunlarını belirt
+        zIndex: zIndexValue // Z-index olarak hesaplanan değeri kullan
       };
     });
+    
+  // Diğer kullanıcıların sorunları için markerlar
+  const otherMarkers = allIssues
+    .filter(issue => {
+      // Eğer kullanıcının sorunuysa ekleme (zaten yukarıda ekledik)
+      const isUserIssue = userIssues.some(userIssue => {
+        const userIssueId = userIssue.hexId || (userIssue.id ? userIssue.id.toString() : '');
+        const currentIssueId = issue.hexId || (issue.id ? issue.id.toString() : '');
+        return userIssueId === currentIssueId;
+      });
+      
+      // Check if status is in progress (1) - ONLY in progress for other users
+      const statusStr = String(issue.status || '').toLowerCase();
+      const isInProgress = statusStr === 'in_progress' || 
+                           statusStr === 'inprogress' ||
+                           statusStr === 'in progress' ||
+                           statusStr === 'processing' ||
+                           statusStr === '1' ||
+                           issue.status === 1;
+      
+      // Check if coordinates are valid
+      const hasValidCoords = 
+        issue.latitude !== undefined && 
+        issue.longitude !== undefined && 
+        issue.latitude !== 0 && 
+        issue.longitude !== 0;
+      
+      return !isUserIssue && isInProgress && hasValidCoords;
+    })
+    .map((issue, index) => {
+      const issueId = issue.hexId || (issue.id ? issue.id.toString() : '');
+      
+      // Koordinat anahtarı oluştur
+      const coordKey = `${issue.latitude?.toFixed(5)},${issue.longitude?.toFixed(5)}`;
+      const group = coordinateGroups.get(coordKey);
+      
+      // Aynı koordinatta birden fazla sorun varsa, küçük kaydırmalar ekle
+      let adjustedLatitude = issue.latitude || 0;
+      let adjustedLongitude = issue.longitude || 0;
+      
+      if (group && group.count > 1) {
+        // Eğer bu koordinatta kullanıcı sorunu yoksa
+        if (!group.hasUserIssue) {
+          // Her sorun için hafif bir kaydırma ekle (dağıtmak için index kullan)
+          const offsetMultiplier = 0.00003; // Daha küçük bir kaydırma değeri
+          adjustedLatitude += offsetMultiplier * Math.cos(index * Math.PI / 4);
+          adjustedLongitude += offsetMultiplier * Math.sin(index * Math.PI / 4);
+        } else {
+          // Eğer bu koordinatta kullanıcı sorunu varsa, hafif sol-aşağı kaydır
+          const offsetMultiplier = 0.00005;
+          adjustedLatitude -= offsetMultiplier;
+          adjustedLongitude -= offsetMultiplier;
+        }
+      }
+      
+      return {
+        id: issueId,
+        coordinates: {
+          latitude: adjustedLatitude,
+          longitude: adjustedLongitude,
+        },
+        title: issue.title,
+        description: issue.description,
+        color: '#9CA3AF', // Gri renk - diğer kullanıcıların sorunları için
+        isUserIssue: false, // Diğer kullanıcıların sorunlarını belirt
+        zIndex: 500 // Daha düşük z-index (kullanıcı sorunlarının altında gösterilsin)
+      };
+    });
+  
+  // Önce otherMarkers, sonra userMarkers ekleyerek userMarkers'ın daha üstte olmasını sağla
+  const mapMarkers = [...otherMarkers, ...userMarkers];
   
   // Get user's name - from API if available, fallback to auth context
   const getUserName = () => {
@@ -370,10 +599,14 @@ export default function HomeScreen() {
             initialRegion={campusMapRegion}
             markers={mapMarkers}
             onMarkerPress={(marker) => {
-              // Navigate to detail page for all issues
-              if (marker && marker.id) {
+              // Sadece kullanıcının kendi sorunlarına tıklandığında detay sayfasına git
+              if (marker && marker.id && marker.isUserIssue) {
                 console.log('Navigating to issue detail with ID:', marker.id);
                 navigateToIssueDetail(marker.id);
+              } else if (marker && !marker.isUserIssue) {
+                // Diğer kullanıcıların sorunlarına tıklandığında hiçbir şey yapma
+                // (Marker'a tıklandığında zaten başlık popup olarak gösteriliyor)
+                console.log('Other user issue clicked, no action needed:', marker.title);
               } else {
                 console.error('Invalid marker or marker ID:', marker);
               }

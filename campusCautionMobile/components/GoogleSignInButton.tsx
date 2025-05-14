@@ -52,6 +52,16 @@ const GoogleSignInButton = () => {
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
+      
+      // First sign out to ensure we get the account picker every time
+      try {
+        await GoogleSignin.signOut();
+        console.log('Signed out from previous Google session');
+      } catch (signOutError) {
+        // It's okay if this fails, just continue
+        console.log('No previous Google session to sign out from');
+      }
+      
       // Check if Google Play Services are available
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       

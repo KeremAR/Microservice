@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { API_BASE_URL, API_ENDPOINTS, getHeaders } from '../constants/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import auth from '@react-native-firebase/auth';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 type User = {
   id: string;
@@ -355,18 +356,30 @@ export default function useCustomAuth() {
   // Çıkış işlemi
   const logout = async () => {
     try {
-      // Sign out from Firebase if user is signed in
+      // Try to sign out from Google Sign-In first
+      try {
+        // Sign out from Google (no need to check if signed in first)
+        await GoogleSignin.signOut();
+        console.log('Successfully signed out from Google');
+      } catch (googleError) {
+        console.error('Google Sign-In logout error:', googleError);
+        // Continue logout process even if Google Sign-In logout fails
+      }
+      
+      // Then sign out from Firebase
       const currentUser = auth().currentUser;
       if (currentUser) {
         await auth().signOut();
       }
       
+      // Clear local storage
       await AsyncStorage.removeItem(TOKEN_KEY);
       await AsyncStorage.removeItem(USER_KEY);
       setUser(null);
       setToken(null);
       return true;
     } catch (err) {
+      console.error('Logout error:', err);
       return false;
     }
   };

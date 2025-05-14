@@ -19,10 +19,100 @@ from typing import Optional, Dict, Any
 from supabase import create_client, Client
 from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
 import time
+import redis
+from functools import wraps
 
 load_dotenv()
 
 app = FastAPI(title="User Service")
+
+# Initialize Redis client
+redis_host = os.getenv("REDIS_HOST", "redis")  # Default to 'redis' for Docker Compose
+redis_port = int(os.getenv("REDIS_PORT", 6379))
+redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+
+# Redis connection check
+try:
+    redis_client.ping()
+    print(f"Successfully connected to Redis at {redis_host}:{redis_port}")
+except redis.ConnectionError as e:
+    print(f"Failed to connect to Redis: {e}")
+    # Continue without Redis, service can still function
+
+# Redis cache decorator for endpoints
+def cache_response(expiration_time=60):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Create a cache key from function name and arguments
+            # For endpoints with authorization headers, we'll use them in the key
+            authorization = kwargs.get('authorization')
+            if authorization:
+                cache_key = f"{func.__name__}:{authorization}"
+            else:
+                # For endpoints without auth, create key from path and query params if any
+                request = kwargs.get('request', args[0] if args else None)
+                if request and hasattr(request, 'url'):
+                    cache_key = f"{func.__name__}:{request.url.path}{request.url.query}"
+                else:
+                    # Fallback to just function name if we can't identify a more specific key
+                    cache_key = f"{func.__name__}"
+            
+            request_start_time = time.time()
+            
+            # Try to get from cache
+            try:
+                cached_data = redis_client.get(cache_key)
+                if cached_data:
+                    cache_time = time.time() - request_start_time
+                    print(f"[Redis Cache] HIT for key: {cache_key} - Response time: {cache_time*1000:.2f}ms")
+                    return JSONResponse(content=json.loads(cached_data))
+                print(f"[Redis Cache] MISS for key: {cache_key}")
+            except Exception as e:
+                print(f"[Redis Cache] Error getting from cache: {e}")
+                # Continue execution even if cache retrieval fails
+            
+            # Execute the original function and time it
+            function_start_time = time.time()
+            response = await func(*args, **kwargs)
+            function_time = time.time() - function_start_time
+            total_time = time.time() - request_start_time
+            
+            print(f"[Redis Cache] Function execution time: {function_time*1000:.2f}ms, Total processing time: {total_time*1000:.2f}ms")
+            
+            # Only cache successful responses
+            if hasattr(response, 'status_code') and 200 <= response.status_code < 300:
+                try:
+                    # Extract the response data
+                    if hasattr(response, 'body'):
+                        data_to_cache = response.body.decode('utf-8')
+                    else:
+                        # If it's a JSONResponse, get the json body
+                        data_to_cache = json.dumps(response.body) if hasattr(response, 'json') else json.dumps(response.dict())
+                    
+                    # Store in Redis with expiration
+                    redis_client.setex(cache_key, expiration_time, data_to_cache)
+                    print(f"[Redis Cache] Stored key: {cache_key}")
+                except Exception as e:
+                    print(f"[Redis Cache] Error setting cache: {e}")
+            
+            return response
+        return wrapper
+    return decorator
+
+# Function to invalidate cache based on pattern
+def invalidate_cache(pattern="*"):
+    try:
+        # Find all keys matching the pattern
+        keys = redis_client.keys(pattern)
+        if keys:
+            # Delete all matching keys
+            redis_client.delete(*keys)
+            print(f"[Redis Cache] Invalidated {len(keys)} keys matching pattern: {pattern}")
+        else:
+            print(f"[Redis Cache] No keys found matching pattern: {pattern}")
+    except Exception as e:
+        print(f"[Redis Cache] Error invalidating cache: {e}")
 
 # Add prometheus metrics
 metrics_app = make_asgi_app()
@@ -49,8 +139,13 @@ async def metrics_middleware(request, call_next):
     
     # Skip tracking metrics endpoints
     if not request_path.startswith("/metrics"):
+        duration = time.time() - start_time
         REQUEST_COUNT.labels(request_method, request_path, status_code).inc()
-        REQUEST_LATENCY.labels(request_method, request_path).observe(time.time() - start_time)
+        REQUEST_LATENCY.labels(request_method, request_path).observe(duration)
+        
+        # Log detailed timing for GET profile requests to compare cached vs non-cached
+        if request_method == "GET" and request_path == "/users/profile":
+            print(f"[Performance] {request_method} {request_path} - Total response time: {duration*1000:.2f}ms, Status: {status_code}")
     
     return response
 
@@ -419,7 +514,8 @@ async def signup(user_data: SignUpSchema):
             "role": role,
             "phone_number": phone_number,
             "is_active": True,
-            "department_id": department_id
+            "department_id": department_id,
+            "provider": "email/password"  # Add provider field for consistency
         }
         
         # Kullanıcıyı Supabase'e kaydet
@@ -442,6 +538,9 @@ async def signup(user_data: SignUpSchema):
             metadata={"source": "user_service", "operation": "signup", "supabase_saved": supabase_saved}
         )
         await send_message_to_rabbitmq(event, "user")
+        
+        # Invalidate any cached user data that might exist
+        invalidate_cache(pattern="get_profile:*")
         
         return JSONResponse(content={
             "status": "success",
@@ -473,6 +572,7 @@ async def signup(user_data: SignUpSchema):
 async def login(user_data: LoginSchema):
     email = user_data.email
     password = user_data.password
+    provider = getattr(user_data, 'provider', None)  # Get provider if it exists
     
     try:
         # Get user by email from Firebase
@@ -500,7 +600,8 @@ async def login(user_data: LoginSchema):
                 "surname": "",
                 "role": "user",
                 "is_active": True,
-                "department_id": None
+                "department_id": None,
+                "provider": provider  # Add the provider to the user data
             }
             
             # Gelecekte Supabase'e kaydetmeyi dene
@@ -528,6 +629,9 @@ async def login(user_data: LoginSchema):
         )
         await send_message_to_rabbitmq(event, "user")
         
+        # Invalidate any cached user data for this specific user
+        invalidate_cache(pattern=f"get_profile:*{firebase_user.uid}*")
+        
         return JSONResponse(content={
             "status": "success",
             "code": 200,
@@ -554,8 +658,118 @@ async def login(user_data: LoginSchema):
             }
         })
 
-# Yeni eklenen profil endpoint'i
+@app.post("/auth/google-signup")
+async def google_signup(request: dict):
+    """
+    Endpoint for handling Google Sign-In users after they are authenticated.
+    This endpoint receives the Firebase UID from Google authentication,
+    generates a UUID, updates the Firebase user's UID, and saves it to Supabase.
+    """
+    firebase_uid = request.get("uid")
+    email = request.get("email")
+    display_name = request.get("displayName", "")
+    given_name = request.get("given_name", "")
+    family_name = request.get("family_name", "")
+    
+    if not firebase_uid or not email:
+        raise HTTPException(status_code=400, detail={
+            "status": "error",
+            "code": 400,
+            "message": "Missing required fields: uid and email"
+        })
+    
+    try:
+        # Check if this Google user already exists in our system
+        existing_user = await get_user_from_supabase({"firebase_uid": firebase_uid})
+        if existing_user:
+            # User already exists with a UUID format, no need to modify
+            if len(existing_user.get("id", "")) == 36 and "-" in existing_user.get("id", ""):
+                return JSONResponse(content={
+                    "status": "success",
+                    "code": 200,
+                    "message": f"User already exists with proper UUID format",
+                    "user_id": existing_user["id"],
+                    "firebase_uid": existing_user["firebase_uid"],
+                    "email": existing_user["email"]
+                })
+        
+        # Create a new UUID for this user
+        new_uuid = str(uuid.uuid4())
+        print(f"Generated new UUID for Google user {email}: {new_uuid}")
+        
+        # Get the user from Firebase
+        firebase_user = auth.get_user(firebase_uid)
+        
+        # Create a custom token to authenticate the user
+        custom_token = auth.create_custom_token(firebase_uid)
+        
+        # Prepare user data for Supabase
+        # First try to use the explicitly provided given/family names
+        name = given_name
+        surname = family_name
+        
+        # If not provided, extract from display_name as fallback
+        if not name and display_name:
+            name_parts = display_name.split() if display_name else ["", ""]
+            name = name_parts[0] if len(name_parts) > 0 else ""
+            surname = name_parts[1] if len(name_parts) > 1 else ""
+        
+        user_data_dict = {
+            "id": new_uuid,
+            "email": email,
+            "firebase_uid": firebase_uid,
+            "name": name,
+            "surname": surname,
+            "role": "user",
+            "is_active": True,
+            "provider": "google"
+        }
+        
+        # Save user to Supabase
+        supabase_result = await create_user_in_supabase(user_data_dict)
+        supabase_saved = False
+        
+        if supabase_result:
+            print(f"Google user successfully saved to Supabase with UUID: {new_uuid}")
+            supabase_saved = True
+            USERS_REGISTERED_TOTAL.inc()
+        else:
+            print(f"WARNING: Failed to save Google user to Supabase: {email}")
+        
+        # Send domain event to RabbitMQ
+        event = UserCreatedEvent.create(
+            user_id=new_uuid,
+            email=email,
+            metadata={"source": "user_service", "operation": "google_signup", "supabase_saved": supabase_saved}
+        )
+        await send_message_to_rabbitmq(event, "user")
+        
+        # Invalidate any cached user data
+        invalidate_cache(pattern=f"get_profile:*{firebase_uid}*")
+        invalidate_cache(pattern=f"get_profile:*{new_uuid}*")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "code": 201,
+            "message": f"Google user registered with UUID {new_uuid}",
+            "user_id": new_uuid,
+            "firebase_uid": firebase_uid,
+            "email": email,
+            "token": custom_token.decode() if custom_token else None,
+            "supabase_saved": supabase_saved
+        })
+    
+    except Exception as e:
+        print(f"Google signup error: {str(e)}")
+        raise HTTPException(status_code=500, detail={
+            "status": "error",
+            "code": 500,
+            "message": f"Internal Server Error: {str(e)}"
+        })
+
+# Update the profile endpoint to also check for Google users without UUID format
 @app.get("/users/profile")
+@cache_response(expiration_time=300)  # Cache for 5 minutes
 async def get_profile(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail={
@@ -625,10 +839,44 @@ async def get_profile(authorization: str = Header(None)):
         
         supabase_available = True
         
+        # Check if this is a Google user with non-UUID format
+        is_google_user = False
+        if firebase_data and hasattr(firebase_data, 'provider_data') and firebase_data.provider_data:
+            providers = [p.provider_id for p in firebase_data.provider_data]
+            is_google_user = 'google.com' in providers
+            
+        # If this is a Google user without a UUID format ID, suggest using the google-signup endpoint
+        needs_uuid_format = is_google_user and user_id and not user_data
+        if needs_uuid_format:
+            return JSONResponse(content={
+                "status": "warning",
+                "code": 202,
+                "message": "Google user detected without UUID format",
+                "action_required": "Please use the /auth/google-signup endpoint to generate a UUID for this user",
+                "firebase_uid": user_id,
+                "email": firebase_data.email if firebase_data else None
+            })
+        
         # Kullanıcı Supabase'de bulunamazsa, Firebase bilgilerini kullan
         if not user_data and firebase_data:
             print(f"User not found in Supabase, using Firebase data: {firebase_data.email}")
             supabase_available = False
+            
+            # Determine provider based on Firebase auth providers
+            provider = None
+            try:
+                if hasattr(firebase_data, 'provider_data') and firebase_data.provider_data:
+                    providers = [p.provider_id for p in firebase_data.provider_data]
+                    if 'google.com' in providers:
+                        provider = 'google'
+                    elif 'facebook.com' in providers:
+                        provider = 'facebook'
+                    elif 'apple.com' in providers:
+                        provider = 'apple'
+                    else:
+                        provider = 'email'
+            except Exception as provider_err:
+                print(f"Error determining provider: {provider_err}")
             
             # Firebase verilerinden bir kullanıcı profili oluştur
             user_data = {
@@ -640,7 +888,8 @@ async def get_profile(authorization: str = Header(None)):
                 "role": "user",
                 "phone_number": firebase_data.phone_number or "",
                 "is_active": not firebase_data.disabled,
-                "department_id": None
+                "department_id": None,
+                "provider": provider
             }
             
             # Gelecekte Supabase'e kaydetmeyi dene

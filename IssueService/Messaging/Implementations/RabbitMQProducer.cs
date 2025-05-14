@@ -118,6 +118,8 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
             var json = JsonSerializer.Serialize(message);
             var body = Encoding.UTF8.GetBytes(json);
 
+            Console.WriteLine($"[RabbitMQProducer] Publishing JSON: {json}");
+
             _channel.BasicPublish(
                 exchange: "",
                 routingKey: queueName,

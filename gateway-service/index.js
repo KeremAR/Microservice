@@ -105,7 +105,6 @@ const logProvider = (provider) => {
   };
 };
 
-// Proxy routes with URLs from environment variables
 app.use('/user', createProxyMiddleware({
   target: USER_SERVICE_URL,
   changeOrigin: true,
@@ -142,8 +141,6 @@ app.use('/issue', createProxyMiddleware({
   logProvider,
   onProxyReq: (proxyReq, req, res) => {
     console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
-    console.log(`[Gateway] Request headers:`, req.headers);
-    console.log(`[Gateway] ProxyReq path: ${proxyReq.path}`);
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);

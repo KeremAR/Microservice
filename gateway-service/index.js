@@ -8,6 +8,7 @@ const fs = require('fs');
 const morgan = require('morgan');
 const http = require('http');
 const promClient = require('prom-client');
+const Redis = require('ioredis');
 
 // Create a Registry to register the metrics
 const register = new promClient.Registry();
@@ -17,6 +18,56 @@ register.setDefaultLabels({
 });
 // Enable the collection of default metrics
 promClient.collectDefaultMetrics({ register });
+
+// REDIS CACHING - START
+// Initialize Redis Client
+// Ensure REDIS_HOST and REDIS_PORT are set in your .env files or docker-compose environment
+const redisClient = new Redis({
+  host: process.env.REDIS_HOST || 'redis', // Default to 'redis' for Docker Compose
+  port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+  // Add other Redis options if needed, e.g., password
+});
+
+redisClient.on('connect', () => {
+  console.log('Gateway connected to Redis successfully!');
+});
+
+redisClient.on('error', (err) => {
+  console.error('Gateway Redis connection error:', err);
+});
+
+// Cache middleware function
+const cacheMiddleware = (req, res, next) => {
+  // Only cache GET requests
+  if (req.method !== 'GET') {
+    return next();
+  }
+
+  const key = req.originalUrl; // Use the full URL as the cache key
+  redisClient.get(key, (err, data) => {
+    if (err) {
+      console.error('Redis get error:', err);
+      return next(); // On error, proceed without cache
+    }
+    if (data !== null) {
+      console.log(`[Gateway Cache] HIT for key: ${key}`);
+      // Attempt to parse as JSON. If it fails, send as plain text.
+      try {
+        res.setHeader('Content-Type', 'application/json'); // Assume JSON for cached proxy responses
+        res.status(200).send(JSON.parse(data));
+      } catch (parseError) {
+        console.warn(`[Gateway Cache] Data for key ${key} is not valid JSON. Sending as plain text.`);
+        res.status(200).send(data);
+      }
+    } else {
+      console.log(`[Gateway Cache] MISS for key: ${key}`);
+      // If cache miss, we need to capture the response from the proxy to store it.
+      // We'll modify the onProxyRes for the target route.
+      next();
+    }
+  });
+};
+// REDIS CACHING - END
 
 // Create custom metrics
 const httpRequestDurationMicroseconds = new promClient.Histogram({
@@ -105,7 +156,9 @@ const logProvider = (provider) => {
   };
 };
 
-// Proxy routes with URLs from environment variables
+// REDIS CACHING - Apply cache middleware specifically before the /user proxy
+app.use('/user', cacheMiddleware); // This must come BEFORE the proxy for /user
+
 app.use('/user', createProxyMiddleware({
   target: USER_SERVICE_URL,
   changeOrigin: true,
@@ -116,9 +169,38 @@ app.use('/user', createProxyMiddleware({
     console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
   },
   onProxyRes: (proxyRes, req, res) => {
+    // REDIS CACHING - START: Store response in cache
+    if (req.method === 'GET' && proxyRes.statusCode >= 200 && proxyRes.statusCode < 300) {
+      const key = req.originalUrl;
+      let body = [];
+      proxyRes.on('data', (chunk) => {
+        body.push(chunk);
+      });
+      proxyRes.on('end', () => {
+        const responseBody = Buffer.concat(body).toString();
+        // Store in Redis with an expiration (e.g., 10 minutes = 600 seconds)
+        // Only cache if responseBody is not empty
+        if (responseBody) {
+            redisClient.setex(key, 60, responseBody, (err) => {
+                if (err) {
+                    console.error('[Gateway Cache] Redis setex error:', err);
+                } else {
+                    console.log(`[Gateway Cache] Stored key: ${key}`);
+                }
+            });
+        } else {
+            console.log(`[Gateway Cache] Skipped storing empty response for key: ${key}`);
+        }
+
+      });
+    }
+    // REDIS CACHING - END
     console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
   }
 }));
+
+// REDIS CACHING - Apply cache middleware specifically before the /issue proxy
+app.use('/issue', cacheMiddleware); // This must come BEFORE the proxy for /issue
 
 app.use('/department', createProxyMiddleware({
   target: DEPARTMENT_SERVICE_URL,
@@ -142,10 +224,34 @@ app.use('/issue', createProxyMiddleware({
   logProvider,
   onProxyReq: (proxyReq, req, res) => {
     console.log(`[Gateway] Request: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
-    console.log(`[Gateway] Request headers:`, req.headers);
-    console.log(`[Gateway] ProxyReq path: ${proxyReq.path}`);
+    // console.log(`[Gateway] Request headers:`, req.headers); // Detaylı loglama için açılabilir
+    // console.log(`[Gateway] ProxyReq path: ${proxyReq.path}`); // Detaylı loglama için açılabilir
   },
   onProxyRes: (proxyRes, req, res) => {
+    // Başarılı GET isteklerinin yanıtlarını önbelleğe al
+    if (req.method === 'GET' && proxyRes.statusCode >= 200 && proxyRes.statusCode < 300) {
+      const key = req.originalUrl; 
+      let body = [];
+      proxyRes.on('data', (chunk) => {
+        body.push(chunk);
+      });
+      proxyRes.on('end', () => {
+        const responseBody = Buffer.concat(body).toString();
+        if (responseBody) {
+            redisClient.setex(key, 60, responseBody, (err) => {
+                if (err) {
+                    console.error(`[Gateway Cache] Redis setex error for ${key}:`, err);
+                } else {
+                    console.log(`[Gateway Cache] Stored key: ${key}`);
+                }
+            });
+        } else {
+            console.log(`[Gateway Cache] Skipped storing empty response for key: ${key}`);
+        }
+      });
+    }
+    // Cache invalidation logic for POST, PUT, DELETE (previous code) is now removed.
+
     console.log(`[Gateway] Response: ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`);
   }
 }));

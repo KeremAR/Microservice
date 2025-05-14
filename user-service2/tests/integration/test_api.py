@@ -3,13 +3,26 @@ from fastapi.testclient import TestClient
 import os
 import json
 from unittest.mock import patch, MagicMock
+import prometheus_client
+
+
+# Prometheus registry'i sıfırlama fixture'ı
+@pytest.fixture(autouse=True)
+def reset_prometheus_registry():
+    """Reset Prometheus metrics registry to avoid duplication."""
+    prometheus_client.REGISTRY.clear()
 
 
 # Mocking firebase and other external services
 @pytest.fixture(autouse=True)
 def mock_firebase():
     """Mock Firebase authentication services"""
-    with patch("firebase_admin.auth") as mock_auth:
+    with patch("firebase_admin.credentials.Certificate") as mock_certificate, patch(
+        "firebase_admin.initialize_app"
+    ) as mock_initialize_app, patch("firebase_admin.auth") as mock_auth:
+        mock_certificate.return_value = MagicMock()
+        mock_initialize_app.return_value = MagicMock()
+
         # Setup mocked responses
         mock_auth.create_user.return_value = MagicMock(uid="mocked-firebase-uid")
         mock_auth.get_user_by_email.return_value = MagicMock(uid="mocked-firebase-uid")

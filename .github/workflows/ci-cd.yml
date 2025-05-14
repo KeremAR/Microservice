@@ -20,9 +20,17 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r user-service2/requirements-dev.txt
+          pip install -r requirements-dev.txt
+      
+      - name: Set up Firebase credentials
+        run: |
+          echo "${{ secrets.FIREBASE_KEY || 'mock-credential-for-testing' }}" > serviceAccountKey.json
           
       - name: Run tests
+        env:
+          FIREBASE_TEST_MODE: 'true'
+          SUPABASE_URL: 'mock://supabase.test'
+          SUPABASE_KEY: 'mock-key-for-testing'
         run: |
           pytest --cov=./ --cov-report=xml
           

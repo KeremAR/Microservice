@@ -12,8 +12,6 @@ services:
       - DEPARTMENT_SERVICE_URL=http://department-service:8083
       - ISSUE_SERVICE_URL=http://issue-service:8080
       - NOTIFICATION_SERVICE_URL=http://notification-service:5004
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
     volumes:
       - ./gateway-service/config:/app/config
     expose:
@@ -27,7 +25,6 @@ services:
       - issue-service
       - notification-service
       - rabbitmq
-      - redis
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s

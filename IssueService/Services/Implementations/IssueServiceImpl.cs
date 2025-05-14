@@ -9,6 +9,9 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using Prometheus;
+using StackExchange.Redis;
+using System.Text.Json;
+using System.Diagnostics;
 
 namespace IssueService.Services.Implementations;
 
@@ -17,20 +20,25 @@ public class IssueServiceImpl : IIssueService
     private readonly IIssueRepository _repository;
     private readonly IMediator _mediator;
     private readonly Counter _issuesCreatedCounter;
+    private readonly IDatabase _redisDb;
+    private readonly TimeSpan _defaultCacheExpiry = TimeSpan.FromMinutes(1);
+
+    private const string CacheKeyPrefixIssuesAll = "issues_all";
 
     public IssueServiceImpl(
         IIssueRepository repository,
         IMediator mediator,
-        Counter issuesCreatedCounter)
+        Counter issuesCreatedCounter,
+        IConnectionMultiplexer redisConnection)
     {
         _repository = repository;
         _mediator = mediator;
         _issuesCreatedCounter = issuesCreatedCounter;
+        _redisDb = redisConnection.GetDatabase();
     }
 
     public async Task<Issue> ReportIssueAsync(CreateIssueRequest request)
     {
-        // 1) Aggregate root'tan yeni issue oluştur
         var issue = new Issue(
             title: request.Title,
             description: request.Description,
@@ -41,16 +49,15 @@ public class IssueServiceImpl : IIssueService
             latitude: request.Latitude,
             longitude: request.Longitude);
 
-        // 2) MongoDB'ye kaydet
         await _repository.CreateAsync(issue);
-
-        // Increment the counter after successful creation
         _issuesCreatedCounter.Inc();
 
-        // 3) Domain Event'leri yayınla (in-memory)
-        await DispatchEventsAsync(issue);
+        var sw = Stopwatch.StartNew();
+        await _redisDb.KeyDeleteAsync(CacheKeyPrefixIssuesAll);
+        sw.Stop();
+        Console.WriteLine($"Cache invalidated after creating issue: {issue.Id}. Key: {CacheKeyPrefixIssuesAll} (took {sw.ElapsedMilliseconds}ms)");
 
-        // 4) Response DTO'su dön
+        await DispatchEventsAsync(issue);
         return issue;
     }
 
@@ -59,26 +66,25 @@ public class IssueServiceImpl : IIssueService
         var issue = await _repository.GetByIdAsync(id);
         if (issue == null)
             throw new KeyNotFoundException("Issue not found");
-            
         return issue;
     }
 
     public async Task UpdateIssueStatusAsync(string id, IssueStatus status)
     {
-        // 1) DB'den aggregate'ı al
         var issue = await _repository.GetByIdAsync(id);
-
         if (issue == null)
             throw new KeyNotFoundException("Issue not found");
 
-        // 2) Domain method üzerinden güncelleme yap
         if (status == IssueStatus.Resolved)
-            issue.Resolve(); // domain event ekler
+            issue.Resolve();
 
-        // 3) DB'de sadece status'u güncelle
         await _repository.UpdateStatusAsync(id, status);
 
-        // 4) Domain event varsa yayınla
+        var sw = Stopwatch.StartNew();
+        await _redisDb.KeyDeleteAsync(CacheKeyPrefixIssuesAll);
+        sw.Stop();
+        Console.WriteLine($"Cache invalidated after updating issue: {id}. Key: {CacheKeyPrefixIssuesAll} (took {sw.ElapsedMilliseconds}ms)");
+
         await DispatchEventsAsync(issue);
     }
 
@@ -90,7 +96,39 @@ public class IssueServiceImpl : IIssueService
 
     public async Task<IEnumerable<Issue>> GetAllIssuesAsync()
     {
+        string cacheKey = CacheKeyPrefixIssuesAll;
+        
+        var cacheReadSw = Stopwatch.StartNew();
+        var cachedIssues = await _redisDb.StringGetAsync(cacheKey);
+        cacheReadSw.Stop();
+
+        if (cachedIssues.HasValue)
+        {
+            Console.WriteLine($"Cache HIT for key: {cacheKey} (took {cacheReadSw.ElapsedMilliseconds}ms)");
+            var deserializeSw = Stopwatch.StartNew();
+            var result = JsonSerializer.Deserialize<List<Issue>>(cachedIssues, GetJsonSerializerOptions());
+            deserializeSw.Stop();
+            Console.WriteLine($"Deserialization took {deserializeSw.ElapsedMilliseconds}ms");
+            return result;
+        }
+
+        Console.WriteLine($"Cache MISS for key: {cacheKey} (lookup took {cacheReadSw.ElapsedMilliseconds}ms)");
+        
+        var dbSw = Stopwatch.StartNew();
         var issues = await _repository.GetAllAsync();
+        dbSw.Stop();
+        Console.WriteLine($"Database fetch took {dbSw.ElapsedMilliseconds}ms");
+        
+        var serializeSw = Stopwatch.StartNew();
+        var serializedIssues = JsonSerializer.Serialize(issues, GetJsonSerializerOptions());
+        serializeSw.Stop();
+        Console.WriteLine($"Serialization took {serializeSw.ElapsedMilliseconds}ms");
+        
+        var cacheWriteSw = Stopwatch.StartNew();
+        await _redisDb.StringSetAsync(cacheKey, serializedIssues, _defaultCacheExpiry);
+        cacheWriteSw.Stop();
+        Console.WriteLine($"Stored in cache key: {cacheKey} (write took {cacheWriteSw.ElapsedMilliseconds}ms)");
+        
         return issues;
     }
 
@@ -102,31 +140,25 @@ public class IssueServiceImpl : IIssueService
 
     public async Task<bool> DeleteIssueAsync(string id)
     {
-        Console.WriteLine($"DeleteIssueAsync çağrıldı, ID: {id}");
-        try
+        Console.WriteLine($"DeleteIssueAsync called for ID: {id}");
+        var issueToDelete = await _repository.GetByIdAsync(id);
+        if (issueToDelete == null)
         {
-            // Önce issue'nin var olup olmadığını kontrol edelim
-            var issue = await _repository.GetByIdAsync(id);
-            
-            if (issue == null)
-            {
-                Console.WriteLine($"Issue bulunamadı, ID: {id}");
-                throw new KeyNotFoundException("Issue not found");
-            }
-                
-            Console.WriteLine($"Issue bulundu, ID: {id}, Title: {issue.Title}");
-            
-            // Issue'yu sil
-            var result = await _repository.DeleteAsync(id);
-            Console.WriteLine($"Silme işlemi sonucu: {result}");
-            return result;
+            Console.WriteLine($"Issue not found for deletion, ID: {id}");
+            throw new KeyNotFoundException("Issue not found");
         }
-        catch (Exception ex)
+            
+        var result = await _repository.DeleteAsync(id);
+        Console.WriteLine($"Deletion result from repository: {result}");
+
+        if (result)
         {
-            Console.WriteLine($"DeleteIssueAsync'de hata: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
-            throw; // Rethrow the exception to propagate it upwards
+            var sw = Stopwatch.StartNew();
+            await _redisDb.KeyDeleteAsync(CacheKeyPrefixIssuesAll);
+            sw.Stop();
+            Console.WriteLine($"Cache invalidated after deleting issue: {id}. Key: {CacheKeyPrefixIssuesAll} (took {sw.ElapsedMilliseconds}ms)");
         }
+        return result;
     }
 
     private async Task DispatchEventsAsync(Issue issue)
@@ -135,7 +167,14 @@ public class IssueServiceImpl : IIssueService
         {
             await _mediator.Publish(@event, CancellationToken.None);
         }
-
         issue.ClearEvents();
+    }
+
+    private JsonSerializerOptions GetJsonSerializerOptions()
+    {
+        return new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        };
     }
 }

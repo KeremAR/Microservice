@@ -12,6 +12,7 @@ interface Marker {
   description?: string;
   color?: string;
   isUserIssue?: boolean;
+  zIndex?: number;
 }
 
 interface OSMMapProps {
@@ -111,8 +112,15 @@ const OSMMap: React.FC<OSMMapProps> = ({
       marker.coordinates.longitude !== 0
     );
     
-    return validMarkers.map(marker => {
+    // zIndex değerine göre sırala (yüksek zIndex'e sahip marker'lar üstte gösterilir)
+    const sortedMarkers = [...validMarkers].sort((a, b) => 
+      (b.zIndex || 0) - (a.zIndex || 0)
+    );
+    
+    return sortedMarkers.map(marker => {
       const color = marker.color || 'blue';
+      const zIndex = marker.zIndex || 500; // Varsayılan zIndex
+      
       return `
         L.marker([${marker.coordinates.latitude}, ${marker.coordinates.longitude}], {
           icon: L.divIcon({
@@ -121,7 +129,8 @@ const OSMMap: React.FC<OSMMapProps> = ({
             iconSize: [22, 22],
             iconAnchor: [11, 11]
           }),
-          pane: 'markersPane'
+          pane: 'markersPane',
+          zIndexOffset: ${zIndex} // zIndex değerini marker'a uygula
         }).addTo(map).bindPopup("${marker.title}")
         .on('click', function() {
           window.ReactNativeWebView.postMessage(JSON.stringify({

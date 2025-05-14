@@ -9,6 +9,7 @@ using MediatR;
 using MongoDB.Driver;
 using MongoDB.Bson;
 using Prometheus;
+using StackExchange.Redis;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,6 +20,47 @@ builder.Services.AddSingleton<MongoDbContext>();
 // MediatR
 builder.Services.AddMediatR(cfg => {
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
+});
+
+// Redis Cache
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? builder.Configuration["Redis:ConnectionString"];
+if (string.IsNullOrEmpty(redisConnectionString)) 
+{
+    // Fallback if not found in ConnectionStrings or Redis:ConnectionString
+    // This attempts to build it from REDIS_HOST and REDIS_PORT environment variables if they exist
+    var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"; // Default to localhost if no env var
+    var redisPort = Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379";    // Default to 6379 if no env var
+    redisConnectionString = $"{redisHost}:{redisPort}";
+    Console.WriteLine($"Redis connection string not found in configuration, attempting to use: {redisConnectionString} from environment variables or defaults.");
+}
+else
+{
+    Console.WriteLine($"Using Redis connection string from configuration: {redisConnectionString}");
+}
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp => 
+{
+    try
+    {
+        Console.WriteLine($"Attempting to connect to Redis with connection string: {redisConnectionString}");
+        var configurationOptions = ConfigurationOptions.Parse(redisConnectionString);
+        // You can configure more options here if needed, e.g.:
+        // configurationOptions.AbortOnConnectFail = false; // Important for startup resilience
+        // configurationOptions.ConnectTimeout = 5000; // 5 seconds
+        // configurationOptions.SyncTimeout = 5000;
+        var multiplexer = ConnectionMultiplexer.Connect(configurationOptions);
+        Console.WriteLine("Successfully connected to Redis.");
+        return multiplexer;
+    }
+    catch (RedisConnectionException ex)
+    {
+        Console.Error.WriteLine($"FATAL: Could not connect to Redis. Connection string: {redisConnectionString}. Error: {ex.Message}");
+        // Depending on your resilience requirements, you might want to:
+        // 1. Throw the exception to prevent the app from starting if Redis is critical.
+        // 2. Return a null or a mock/dummy implementation if Redis is optional and the app can run without it.
+        // For now, we rethrow to make it clear that Redis connection failed.
+        throw;
+    }
 });
 
 // Repositories

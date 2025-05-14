@@ -16,6 +16,7 @@ const logo = require('../assets/images/au-logo.png');
 
 import { Stack, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -113,6 +114,9 @@ export default function LoginScreen() {
 
               {/* Or divider */}
               <Text style={styles.divider}>or</Text>
+
+              {/* Google Sign In Button */}
+              <GoogleSignInButton />
 
               {/* Sign up */}
               <View style={styles.signupContainer}>

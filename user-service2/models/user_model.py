@@ -48,6 +48,7 @@ class SignUpSchema(BaseModel):
 class LoginSchema(BaseModel):
     email: EmailStr
     password: str
+    provider: Optional[str] = None
 
 class UserSchema(BaseModel):
     id: str = Field(..., alias="_id")
@@ -61,6 +62,7 @@ class UserSchema(BaseModel):
     is_active: bool = True
     created_at: Optional[str] = Field(default_factory=lambda: str(datetime.now()))
     updated_at: Optional[str] = Field(default_factory=lambda: str(datetime.now()))
+    provider: Optional[str] = None
     
     class Config:
         orm_mode = True

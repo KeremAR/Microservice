@@ -46,8 +46,10 @@ services:
     expose:
       - "8083"
     depends_on:
-      - rabbitmq
-      - issue-service
+      rabbitmq:
+        condition: service_healthy
+      issue-service:
+        condition: service_started
     networks:
       - microservice-network
       
@@ -62,6 +64,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       # Supabase bağlantı bilgileri
       - SUPABASE_DB_HOST=ahrhnlmeimlxttvujmpa.supabase.co
@@ -72,6 +76,8 @@ services:
       # Supabase HTTP API için gerekli anahtarlar
       - SUPABASE_URL=https://ahrhnlmeimlxttvujmpa.supabase.co
       - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFocmhubG1laW1seHR0dnVqbXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MDcxMjIsImV4cCI6MjA2MjI4MzEyMn0.6jJ1IxliIFw4zjBL5BO0Mycdrxnu1LyTLNuf_MKckio
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - ./user-service2:/app
     networks:
@@ -87,7 +93,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-    
+      redis:
+        condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - MongoDB__ConnectionString=mongodb+srv://cefakarberkay:berkay01@campuscation.jtmagbt.mongodb.net/?retryWrites=true&w=majority&appName=CampusCation
@@ -95,6 +102,8 @@ services:
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__UserName=user
       - RabbitMQ__Password=password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     networks:
       - microservice-network
 
@@ -156,6 +165,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - microservice-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Monitoring Services
   prometheus:
@@ -222,6 +247,7 @@ volumes:
   rabbitmq_data:
   prometheus_data:
   grafana_data:
+  redis_data:
 
 networks:
   microservice-network:

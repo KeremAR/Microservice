@@ -8,4 +8,5 @@ uvicorn>=0.15.0
 aio-pika>=8.0.0
 supabase>=0.7.1
 httpx>=0.23.0
-prometheus-client 
+prometheus-client
+redis>=4.3.4 

@@ -6,7 +6,7 @@ This section outlines the step-by-step interaction of microservices during the c
 
 1.  **User Login (Mobile Frontend & User Service):**
     *   The user logs into the **Mobile Frontend** application using either their Microsoft account (Entra ID) or email/password.
-    *   Authentication processes (login/signup and token management) are handled by the **User Service** (Java/Spring Boot).
+    *   Authentication processes (login/signup and token management) are handled by the **User Service** (Python/FastAPI).
 
 2.  **Issue Reporting (Mobile Frontend -> Issue Service):**
     *   The user reports a new issue (title, description, category, photo, etc.) through the mobile application interface (e.g., "Inform Us" button).
@@ -38,15 +38,18 @@ This section outlines the step-by-step interaction of microservices during the c
 
 ## 🎯 Project Goal and Scope
 
-### 1️⃣ User Service  - Spring Boot – Java (PostgreSQL)
+### 1️⃣ User Service - Python – FastAPI (PostgreSQL)
 - Kullanıcı kaydı, giriş (auth), roller (admin, öğrenci vb.)
 - Kullanıcı profili yönetimi
-- JWT veya OAuth2 tabanlı kimlik doğrulama + Role-Based Access Control (RBAC)
+- Firebase Authentication ile kimlik doğrulama + Role-Based Access Control (RBAC)
+- Redis ile önbellekleme (caching)
+- Prometheus ile metrik toplama
+- RabbitMQ ile event publishing
 - **Endpointler:**
-  - `POST /auth/register`
+  - `POST /auth/signup`
   - `POST /auth/login`
-  - `GET /users/{id}`
-  - `PUT /users/{id}`
+  - `GET /users/profile`
+  - `PUT /users/profile`
 
 ### 2️⃣ Issue Service - ASP.NET Core - C# (MongoDB - NoSQL)
 - Kullanıcılar kampüsteki problemleri raporlayacak

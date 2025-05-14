@@ -6,7 +6,7 @@ import jsonschema
 from jsonschema import validate
 
 # Import fixtures from test_api.py
-from .test_api import mock_firebase, mock_db_connection, mock_rabbitmq, mock_redis
+from .test_api import mock_firebase, mock_db_connection, mock_rabbitmq, mock_redis, reset_prometheus_registry
 
 
 @pytest.fixture

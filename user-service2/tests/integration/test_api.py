@@ -10,7 +10,10 @@ import prometheus_client
 @pytest.fixture(autouse=True)
 def reset_prometheus_registry():
     """Reset Prometheus metrics registry to avoid duplication."""
-    prometheus_client.REGISTRY.clear()
+    # Replace clear() with more robust unregistration of all collectors
+    collectors = list(prometheus_client.REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        prometheus_client.REGISTRY.unregister(collector)
 
 
 # Mocking firebase and other external services

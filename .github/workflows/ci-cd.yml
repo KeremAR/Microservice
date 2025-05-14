@@ -24,15 +24,21 @@ jobs:
       
       - name: Set up Firebase credentials
         run: |
-          echo "${{ secrets.FIREBASE_KEY || 'mock-credential-for-testing' }}" > serviceAccountKey.json
-          
+          echo '{"type": "service_account","project_id": "mock-project","private_key_id": "mock-key-id","private_key": "-----BEGIN PRIVATE KEY-----\nMOCKKEY\n-----END PRIVATE KEY-----\n","client_email": "mock@example.com","client_id": "mock-client-id","auth_uri": "https://accounts.google.com/o/oauth2/auth","token_uri": "https://oauth2.googleapis.com/token","auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/mock"}' > user-service2/serviceAccountKey.json
+      
+      - name: Verify test setup
+        working-directory: user-service2
+        run: |
+          python -c "import prometheus_client; print('Prometheus registry contains', list(prometheus_client.REGISTRY._collector_to_names.keys()))"
+      
       - name: Run tests
         env:
           FIREBASE_TEST_MODE: 'true'
           SUPABASE_URL: 'mock://supabase.test'
           SUPABASE_KEY: 'mock-key-for-testing'
+        working-directory: user-service2
         run: |
-          pytest --cov=./ --cov-report=xml
+          python -m pytest --cov=./ --cov-report=xml
           
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

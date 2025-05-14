@@ -29,6 +29,7 @@ public class IssueCreatedListener {
 
     @RabbitListener(queues = RabbitMQConfig.ISSUE_CREATED_QUEUE)
     public void receiveIssueCreatedEvent(String message) {
+        System.out.println("[IssueCreatedListener] Received raw JSON message: " + message);
         try {
             IssueDto issueDto = objectMapper.readValue(message, IssueDto.class);
 

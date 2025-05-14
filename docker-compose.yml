@@ -49,8 +49,10 @@ services:
     expose:
       - "8083"
     depends_on:
-      - rabbitmq
-      - issue-service
+      rabbitmq:
+        condition: service_healthy
+      issue-service:
+        condition: service_started
     networks:
       - microservice-network
       
@@ -92,7 +94,10 @@ services:
     expose:
       - "8080"
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - MongoDB__ConnectionString=mongodb+srv://cefakarberkay:berkay01@campuscation.jtmagbt.mongodb.net/?retryWrites=true&w=majority&appName=CampusCation

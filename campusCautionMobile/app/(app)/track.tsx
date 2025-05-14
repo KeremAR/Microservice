@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { getUserIssues } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Define Issue type based on backend response structure
 interface Issue {
@@ -329,10 +330,12 @@ export default function TrackScreen() {
     }
   };
   
-  // Fetch user issues on component mount
-  useEffect(() => {
-    fetchUserIssues();
-  }, []);
+  // Replace the existing useEffect with useFocusEffect
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserIssues();
+    }, [])
+  );
   
   // Handle pull-to-refresh
   const onRefresh = () => {

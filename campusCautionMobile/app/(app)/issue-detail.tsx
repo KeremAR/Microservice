@@ -17,6 +17,7 @@ import OSMMap from '../../components/OSMMap';
 import { getIssueDetails } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Token key
 const TOKEN_KEY = 'auth_token';
@@ -69,53 +70,56 @@ export default function IssueDetailScreen() {
   const [headerIsLight, setHeaderIsLight] = useState(true);
   
   // Fetch issue details from API
-  useEffect(() => {
-    const fetchIssueDetails = async () => {
-      if (!issueId) {
-        setError('Issue ID is missing');
+  const fetchIssueDetails = async () => {
+    if (!issueId) {
+      setError('Issue ID is missing');
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Get token from context or AsyncStorage
+      let authToken = token;
+      
+      if (!authToken) {
+        console.log('Token not found in context, trying AsyncStorage');
+        authToken = await AsyncStorage.getItem(TOKEN_KEY);
+      }
+      
+      if (!authToken) {
+        setError('Authentication token not found');
         setLoading(false);
         return;
       }
       
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Get token from context or AsyncStorage
-        let authToken = token;
-        
-        if (!authToken) {
-          console.log('Token not found in context, trying AsyncStorage');
-          authToken = await AsyncStorage.getItem(TOKEN_KEY);
-        }
-        
-        if (!authToken) {
-          setError('Authentication token not found');
-          setLoading(false);
-          return;
-        }
-        
-        console.log('Fetching issue details for ID:', issueId);
-        const issueData = await getIssueDetails(authToken, issueId);
-        
-        if (!issueData) {
-          setError('Issue not found or error fetching details');
-          setLoading(false);
-          return;
-        }
-        
-        console.log('Issue details fetched successfully:', issueData);
-        setIssue(issueData);
-      } catch (err) {
-        console.error('Error fetching issue details:', err);
-        setError('Failed to load issue details. Please try again.');
-      } finally {
+      console.log('Fetching issue details for ID:', issueId);
+      const issueData = await getIssueDetails(authToken, issueId);
+      
+      if (!issueData) {
+        setError('Issue not found or error fetching details');
         setLoading(false);
+        return;
       }
-    };
-    
-    fetchIssueDetails();
-  }, [issueId]);
+      
+      console.log('Issue details fetched successfully:', issueData);
+      setIssue(issueData);
+    } catch (err) {
+      console.error('Error fetching issue details:', err);
+      setError('Failed to load issue details. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Use useFocusEffect to fetch issue details every time the screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchIssueDetails();
+    }, [issueId])
+  );
   
   // Scroll pozisyonunu izleyip header rengini değiştirme
   useEffect(() => {

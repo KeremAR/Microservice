@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+spec:
+  replicas: 3  # Ölçeklendirme: 3 kopya çalışacak
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-service
+        image: ${DOCKER_REGISTRY}/user-service:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SUPABASE_DB_HOST
+          value: "ahrhnlmeimlxttvujmpa.supabase.co"
+        - name: SUPABASE_DB_PORT
+          value: "5432"
+        - name: SUPABASE_DB_NAME
+          value: "postgres"
+        - name: SUPABASE_DB_USER
+          value: "postgres"
+        - name: SUPABASE_DB_PASSWORD
+          value: "Qfnr9GtwhCrlVOK3"
+        - name: SUPABASE_URL
+          value: "https://ahrhnlmeimlxttvujmpa.supabase.co"
+        - name: SUPABASE_KEY
+          value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFocmhubG1laW1seHR0dnVqbXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MDcxMjIsImV4cCI6MjA2MjI4MzEyMn0.6jJ1IxliIFw4zjBL5BO0Mycdrxnu1LyTLNuf_MKckio"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+spec:
+  selector:
+    app: user-service
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP  # Sadece küme içinden erişilebilir
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70 

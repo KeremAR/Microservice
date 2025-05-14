@@ -168,3 +168,76 @@ This project uses Prometheus for metrics collection and Grafana for visualizatio
 ### Grafana Dashboards
 
 *   **`monitoring/grafana/dashboards/campus-caution-dashboard.json`:** The main dashboard showing service health (`up` metric), gateway request rates/durations, user registration counts/rates, and issue creation counts/rates.
+
+## Kubernetes Deployment
+
+Bu proje, farklı mikroservislerin Kubernetes kullanılarak deploy edilmesini sağlayan yapılandırma dosyalarını içerir.
+
+### Gereksinimler
+
+- Docker
+- Kubernetes (minikube, kind, Docker Desktop, veya bir Kubernetes kümesi)
+- kubectl
+
+### Docker Image'larını Oluşturma ve Push Etme
+
+Docker image'larını oluşturmak ve bir registry'ye göndermek için:
+
+```bash
+# Script'i çalıştırılabilir hale getir
+chmod +x ./scripts/build-and-push.sh
+
+# Docker Hub veya başka bir registry'ye giriş yap
+docker login
+
+# Servisleri build et ve push et
+./scripts/build-and-push.sh
+```
+
+### Kubernetes'e Deploy Etme
+
+Mikroservisleri Kubernetes kümesine deploy etmek için:
+
+```bash
+# Script'i çalıştırılabilir hale getir
+chmod +x ./scripts/deploy-to-k8s.sh
+
+# Deploy işlemini başlat
+./scripts/deploy-to-k8s.sh
+```
+
+### Servis Ölçeklendirmesi
+
+User Service, varsayılan olarak 3 replica ile ölçeklendirilmiş olarak deploy edilir ve Horizontal Pod Autoscaler (HPA) ile otomatik olarak ölçeklendirilir.
+
+Otomatik ölçeklendirme durumunu kontrol etmek için:
+
+```bash
+kubectl get hpa user-service-hpa -n campus-caution
+```
+
+Replica sayısını manuel olarak değiştirmek için:
+
+```bash
+kubectl scale deployment/user-service --replicas=5 -n campus-caution
+```
+
+### Uygulamaya Erişim
+
+API Gateway servisi, aşağıdaki yöntemlerden biriyle erişilebilir:
+
+1. **Ingress (önerilen):** 
+   `/etc/hosts` dosyanıza `127.0.0.1 campus-caution.local` ekleyin ve 
+   http://campus-caution.local adresinden erişin
+
+2. **Port Forwarding:**
+   ```bash
+   kubectl port-forward svc/api-gateway 3000:3000 -n campus-caution
+   ```
+   Ardından http://localhost:3000 adresinden erişin
+
+3. **LoadBalancer:** (Eğer destelenen bir Kubernetes kümesindeyseniz)
+   ```bash
+   kubectl get service api-gateway -n campus-caution
+   ```
+   External-IP adresi üzerinden erişin

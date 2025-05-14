@@ -18,6 +18,9 @@ The User Service is responsible for managing user authentication, authorization,
 |--------|------------------------------|--------------------------------------|----------------|
 | POST   | `/auth/signup`               | Register a new user                  | None           |
 | POST   | `/auth/login`                | User login                           | None           |
+| GET    | `/users/profile`              | Get user profile                     | None           |
+| PUT    | `/users/profile`              | Update user profile                  | None           |
+| DELETE | `/users/profile`              | Delete user profile                  | None           |
 
 ## Example Requests
 

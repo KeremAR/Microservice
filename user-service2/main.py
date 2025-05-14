@@ -6,7 +6,7 @@ import os
 import uuid
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from models.user_model import SignUpSchema, LoginSchema
+from models.user_model import SignUpSchema, LoginSchema, UpdateUserRequest
 from models.events import UserCreatedEvent, UserLoggedInEvent
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +21,7 @@ from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
 import time
 import redis
 from functools import wraps
+from datetime import datetime
 
 load_dotenv()
 
@@ -1102,6 +1103,297 @@ async def get_profile(authorization: str = Header(None)):
                 "status": "error",
                 "code": 401,
                 "message": "Failed to verify token or get user profile",
+                "details": {"error_description": str(e)},
+            },
+        )
+
+
+@app.put("/users/profile")
+async def update_profile(user_data: UpdateUserRequest, authorization: str = Header(None)):
+    """
+    Update user profile information
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "status": "error",
+                "code": 401,
+                "message": "Unauthorized request. Bearer token is required.",
+            },
+        )
+
+    token = authorization.replace("Bearer ", "")
+    user_id = None
+
+    try:
+        # Token'dan user_id'yi çıkaralım
+        try:
+            # Custom token'dan user_id bilgisini çıkarmak için
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            
+            # Custom token içinde uid alanı bulunur
+            if "uid" in decoded:
+                user_id = decoded["uid"]
+            else:
+                # Başka bir yöntem de deneyebiliriz
+                for field in ["sub", "user_id", "id"]:
+                    if field in decoded:
+                        user_id = decoded[field]
+                        break
+        except Exception as e:
+            print(f"Token decode error: {e}")
+
+        # Eğer hala user_id bulunamadıysa, Firebase'e başvuralım
+        if not user_id:
+            try:
+                # Firebase token'ı doğrula
+                decoded_token = auth.verify_id_token(token)
+                user_id = decoded_token.get("uid")
+            except Exception as e:
+                print(f"Firebase token verification error: {e}")
+
+        # Hala user_id bulunamadıysa, hata döndürelim
+        if not user_id:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "status": "error",
+                    "code": 401,
+                    "message": "Invalid token. Could not extract user ID.",
+                },
+            )
+
+        # Supabase'den kullanıcı bilgilerini al
+        current_user = await get_user_from_supabase({"firebase_uid": user_id})
+
+        # Kullanıcı bulunamazsa id ile tekrar deneyelim
+        if not current_user:
+            current_user = await get_user_from_supabase({"id": user_id})
+
+        # Hiçbir şekilde kullanıcı bulunamazsa 404 hatası ver
+        if not current_user:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "code": 404, "message": "User not found"},
+            )
+
+        # Güncelleme için kullanıcı verilerini hazırla
+        update_data = {}
+        if user_data.name is not None:
+            update_data["name"] = user_data.name
+        if user_data.surname is not None:
+            update_data["surname"] = user_data.surname
+        if user_data.phone_number is not None:
+            update_data["phone_number"] = user_data.phone_number
+        
+        # Güncellenme zamanını ekle
+        update_data["updated_at"] = str(datetime.now())
+        
+        # Kullanıcıyı güncelle
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                # Supabase kullanıcısını güncelle
+                updated_user = (
+                    supabase.table("users")
+                    .update(update_data)
+                    .eq("id", current_user["id"])
+                    .execute()
+                )
+                
+                if updated_user.data:
+                    print(f"User profile updated: {current_user['id']}")
+                    
+                    # Önbelleği temizle
+                    invalidate_cache(pattern=f"get_profile:*{user_id}*")
+                    invalidate_cache(pattern=f"get_profile:*{current_user['id']}*")
+                    
+                    # Güncellenmiş kullanıcı bilgilerini döndür
+                    return JSONResponse(
+                        content={
+                            "status": "success",
+                            "code": 200,
+                            "message": "User profile updated successfully",
+                            "user_id": current_user["id"],
+                            "name": update_data.get("name", current_user["name"]),
+                            "surname": update_data.get("surname", current_user["surname"]),
+                            "email": current_user["email"],
+                            "phone_number": update_data.get("phone_number", current_user.get("phone_number", "")),
+                        }
+                    )
+                else:
+                    raise Exception("No data returned from Supabase update operation")
+            else:
+                raise Exception("Could not connect to Supabase")
+        except Exception as e:
+            print(f"Error updating user in Supabase: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "status": "error",
+                    "code": 500,
+                    "message": f"Failed to update user: {str(e)}",
+                },
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Profile update error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "code": 500,
+                "message": "Failed to update user profile",
+                "details": {"error_description": str(e)},
+            },
+        )
+
+
+@app.delete("/users/profile")
+async def delete_profile(authorization: str = Header(None)):
+    """
+    Delete user profile
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "status": "error",
+                "code": 401,
+                "message": "Unauthorized request. Bearer token is required.",
+            },
+        )
+
+    token = authorization.replace("Bearer ", "")
+    user_id = None
+
+    try:
+        # Token'dan user_id'yi çıkaralım
+        try:
+            # Custom token'dan user_id bilgisini çıkarmak için
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            
+            # Custom token içinde uid alanı bulunur
+            if "uid" in decoded:
+                user_id = decoded["uid"]
+            else:
+                # Başka bir yöntem de deneyebiliriz
+                for field in ["sub", "user_id", "id"]:
+                    if field in decoded:
+                        user_id = decoded[field]
+                        break
+        except Exception as e:
+            print(f"Token decode error: {e}")
+
+        # Eğer hala user_id bulunamadıysa, Firebase'e başvuralım
+        if not user_id:
+            try:
+                # Firebase token'ı doğrula
+                decoded_token = auth.verify_id_token(token)
+                user_id = decoded_token.get("uid")
+            except Exception as e:
+                print(f"Firebase token verification error: {e}")
+
+        # Hala user_id bulunamadıysa, hata döndürelim
+        if not user_id:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "status": "error",
+                    "code": 401,
+                    "message": "Invalid token. Could not extract user ID.",
+                },
+            )
+
+        # Supabase'den kullanıcı bilgilerini al
+        current_user = await get_user_from_supabase({"firebase_uid": user_id})
+
+        # Kullanıcı bulunamazsa id ile tekrar deneyelim
+        if not current_user:
+            current_user = await get_user_from_supabase({"id": user_id})
+
+        # Hiçbir şekilde kullanıcı bulunamazsa 404 hatası ver
+        if not current_user:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "code": 404, "message": "User not found"},
+            )
+
+        user_email = current_user.get("email")
+        
+        # 1. Firebase'den kullanıcıyı sil
+        firebase_deleted = False
+        try:
+            auth.delete_user(user_id)
+            firebase_deleted = True
+            print(f"User deleted from Firebase: {user_id}")
+        except Exception as firebase_err:
+            print(f"Error deleting user from Firebase: {firebase_err}")
+            # Firebase'den silinmese bile Supabase'den silmeye devam edebiliriz
+        
+        # 2. Supabase'den kullanıcıyı sil
+        supabase_deleted = False
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                deleted_response = (
+                    supabase.table("users")
+                    .delete()
+                    .eq("id", current_user["id"])
+                    .execute()
+                )
+                
+                if deleted_response.data:
+                    supabase_deleted = True
+                    print(f"User deleted from Supabase: {current_user['id']}")
+                else:
+                    print(f"No records were deleted from Supabase for user: {current_user['id']}")
+            else:
+                print("Could not connect to Supabase")
+        except Exception as supabase_err:
+            print(f"Error deleting user from Supabase: {supabase_err}")
+        
+        # 3. Kullanıcı önbelleğini temizle
+        invalidate_cache(pattern=f"get_profile:*{user_id}*")
+        invalidate_cache(pattern=f"get_profile:*{current_user['id']}*")
+        
+        # 4. Silme işlemi sonucunu döndür
+        if firebase_deleted or supabase_deleted:
+            return JSONResponse(
+                content={
+                    "status": "success",
+                    "code": 200,
+                    "message": "User deleted successfully",
+                    "user_id": current_user["id"],
+                    "email": user_email,
+                    "firebase_deleted": firebase_deleted,
+                    "supabase_deleted": supabase_deleted,
+                    "warning": None if (firebase_deleted and supabase_deleted) else "User could not be fully deleted from all systems"
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "status": "error",
+                    "code": 500,
+                    "message": "Failed to delete user from any system",
+                },
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Profile deletion error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "code": 500,
+                "message": "Failed to delete user profile",
                 "details": {"error_description": str(e)},
             },
         )

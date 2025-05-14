@@ -10,7 +10,7 @@ This service provides:
 - Viewing Issue Details
 - Retrieving User Issues
 - Updating Issue Status
-- Publishing events through RabbitMQ
+- Publishing events through RabbitMQ for issue creation and status changes
 
 ---
 
@@ -24,6 +24,7 @@ This service provides:
 | MediatR | Domain Event Publishing and In-memory Dispatch |
 | Docker / Docker Compose | Containerization |
 | Swagger (Swashbuckle) | API Documentation |
+| Prometheus | Metrics and Monitoring |
 | C# | Programming Language |
 
 ---
@@ -51,9 +52,10 @@ The project uses a Domain-Driven Design (DDD) approach.
 > 📂 Path: `Domain/IssueAggregate/Events`
 
 ### 3. **Event Handlers**
-- `IssueCreatedHandler` listens to `IssueCreatedEvent` and publishes a message to RabbitMQ.
+- `IssueCreatedHandler` listens to `IssueCreatedEvent` and publishes a message to RabbitMQ (`issue_created` queue).
+- `IssueStatusChangedHandler` listens to `IssueStatusChangedEvent` and publishes a message to RabbitMQ (`issue_status_changed` queue).
 
-> 📂 Path: `Application/Handlers/IssueCreatedHandler.cs`
+> 📂 Paths: `Application/Handlers/IssueCreatedHandler.cs`, `Application/Handlers/IssueStatusChangedHandler.cs`
 
 ---
 
@@ -65,7 +67,7 @@ The project uses a Domain-Driven Design (DDD) approach.
 | `GET` | `/issues/{id}` | Retrieve issue details |
 | `GET` | `/issues/user/{userId}` | Retrieve all issues for a specific user |
 | `GET` | `/issues` | Retrieve all issues |
-| `PUT` | `/issues/{id}/status` | Update issue status |
+| `PUT` | `/issues/{id}/status` | Update issue status (also publishes an event to RabbitMQ) |
 
 ---
 
@@ -111,9 +113,11 @@ mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=ma
 4. Once connected, select the `IssueDb` database to view the `issues` collection
 
 ### Access from .NET Application
-Use the connection string provided by MongoDB Atlas Dashboard:
-```
-mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+Connection settings are provided through environment variables in `docker-compose.yml`:
+```yaml
+environment:
+  - MongoDB__ConnectionString=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
+  - MongoDB__Database=IssueDb
 ```
 
 ### Network Access & Security
@@ -124,25 +128,92 @@ mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=ma
 
 ## 🐇 RabbitMQ Integration
 
-- **Queue Name**: `issue_created`
-- Events are published in JSON format.
+### Overview
+The service is configured to create and use RabbitMQ queues for publishing domain events. This allows other services to be notified of issue creation and status changes, enabling decoupled communication and processing.
 
-Example event payload:
+### Queue Configuration
 
+| Queue Name | Purpose | Durable | Auto-delete | Exclusive |
+|------------|---------|---------|-------------|-----------|
+| `issue_created` | For new issue events | `true` | `false` | `false` |
+| `issue_status_changed` | For issue status update events | `true` | `false` | `false` |
+
+Queue names are configurable via `appsettings.json` (`RabbitMQ:QueueName` and `RabbitMQ:IssueStatusChangedQueueName`).
+
+### Connection Setup
+- The connection to RabbitMQ is established at service startup.
+- The service proactively connects to RabbitMQ and ensures all declared queues are created.
+- Connection parameters are configurable via environment variables.
+- Automatic retry logic (5 attempts with a 2-second delay) handles connection issues.
+- Detailed logging for connection status and errors is provided.
+
+### Events Published
+Events are published in JSON format.
+
+#### Issue Created Event (to `issue_created` queue)
+**Example payload:**
 ```json
 {
   "Id": "608d5e47b6f1a3c6c03fef01",
   "Title": "Broken sidewalk tile",
+  "Description": "Tripping hazard near Engineering building",
+  "Category": "Infrastructure",
+  "PhotoUrl": "https://storage-url.com/photo.jpg",
   "UserId": "user-123",
   "DepartmentId": 3,
-  "Category": "Infrastructure",
   "Latitude": 41.0082,
   "Longitude": 28.9784,
+  "Status": "Pending",
   "CreatedAt": "2025-04-20T14:22:00Z"
 }
 ```
 
-> 📂 Publisher Class: `Messaging/RabbitMQProducer.cs`
+#### Issue Status Changed Event (to `issue_status_changed` queue)
+**Example payload:**
+```json
+{
+  "IssueId": "608d5e47b6f1a3c6c03fef01",
+  "NewStatus": "In Progress",
+  // "UserId": "admin-user-456", // If available and configured
+  "Timestamp": "2025-04-21T10:30:00Z"
+}
+```
+
+### Implementation Details
+- **Publisher Class**: `Messaging/Implementations/RabbitMQProducer.cs`
+  - `PublishIssueCreated(object message)`
+  - `PublishIssueStatusChanged(object message)`
+- **Interface**: `Messaging/Interfaces/IRabbitMQProducer.cs`
+- **Handlers**:
+  - `Application/Handlers/IssueCreatedHandler.cs` (for `issue_created`)
+  - `Application/Handlers/IssueStatusChangedHandler.cs` (for `issue_status_changed`)
+
+### Docker Configuration
+The service is configured to wait for RabbitMQ to be healthy before starting:
+```yaml
+depends_on:
+  rabbitmq:
+    condition: service_healthy
+```
+This ensures that RabbitMQ is fully operational before Issue Service attempts to connect.
+
+---
+
+## 📊 Metrics and Monitoring
+
+The service has been instrumented with Prometheus metrics to monitor its health and performance:
+
+### Available Metrics
+- **`issues_created_total`**: Counter of total issues created
+- Default .NET Core metrics (.NET runtime, HTTP requests, etc.)
+
+### Metrics Endpoints
+- **Prometheus endpoint**: `/metrics` (scraped by Prometheus server)
+
+### Monitoring
+Metrics are visualized in Grafana dashboards:
+- **Main Dashboard**: Available in `monitoring/grafana/dashboards/campus-caution-dashboard.json`
+- **Metrics Display**: Issue creation rate, count, and service health are displayed
 
 ---
 
@@ -195,7 +266,7 @@ Comprehensive unit tests have been written for the Issue Service. These tests ve
 5. **UpdateIssueStatusAsync_ValidStatus_UpdatesAndPublishesEvent**
    - Verifies successful status update
    - Validates repository update
-   - Confirms domain event publication
+   - Confirms domain event publication for both `IssueCreatedEvent` (if applicable) and `IssueStatusChangedEvent`.
 
 6. **UpdateIssueStatusAsync_NonExistingIssue_ThrowsException**
    - Verifies appropriate exception handling when updating non-existing issue
@@ -221,7 +292,7 @@ All tests have passed successfully, indicating that the service is working as ex
 
 ## 🔧 Local Development
 
-To run locally without Docker:
+### Running Locally Without Docker
 
 1. Ensure MongoDB and RabbitMQ are running.
 2. Configure your `appsettings.Development.json` properly:
@@ -239,101 +310,86 @@ To run locally without Docker:
     "Database": "IssueDb"
   },
   "RabbitMQ": {
-    "Host": "localhost",
+    "HostName": "localhost",
     "Port": 5672,
     "UserName": "guest",
     "Password": "guest",
-    "QueueName": "issue_created"
+    "QueueName": "issue_created",
+    "IssueStatusChangedQueueName": "issue_status_changed"
   }
 }
 ```
 
-3. Run the application from the IssueService directory:
-
+3. Run the application:
 ```bash
-cd IssueService
 dotnet run
 ```
 
-Access Swagger UI at:
+### Running with Docker
 
+1. Build and start the service using Docker Compose:
 ```bash
-http://localhost:5240/swagger
+docker-compose build --no-cache issue-service
+docker-compose up -d issue-service
+```
+
+2. View logs:
+```bash
+docker-compose logs -f issue-service
 ```
 
 ---
 
-## 🐳 Docker Compose Setup
-Run all services via Docker Compose:
+## 🔄 Integration with Other Services
 
-```bash
-docker compose up -d
-```
+### Department Service
+- **Listens to**: `issue_created` queue
+- **Action**: When an issue is created, Department Service receives the message and processes it (e.g., stores in its database, associates with a department).
 
-This starts:
-- MongoDB (port 27017)
-- RabbitMQ (ports 5672 & 15672)
-- IssueService API (port 5240)
+### Notification Service
+- **Listens to (Planned)**: `issue_status_changed` queue
+- **Action (Planned)**: When an issue's status changes, Notification Service will receive the message and send a notification to the relevant user.
 
-## 🔧 Local Development
-To run the API locally without Docker:
-1. Ensure a MongoDB instance and RabbitMQ are running on localhost.
-2. In `IssueService/appsettings.Development.json`, set:
-    ```json
-    "MongoDB": {
-      "ConnectionString": "mongodb://root:example@localhost:27017/",
-      "Database": "IssueDb"
-    }
-    ```
-3. Start the API:
-    ```bash
-    cd IssueService
-    dotnet run
-    ```
-4. Visit Swagger UI: `http://localhost:5240/swagger`
+### API Gateway
+- All requests to Issue Service are routed through the API Gateway.
+- API Gateway forwards requests to Issue Service at: `http://issue-service:8080`
+- External access via API Gateway: `http://localhost:3000/issue/*`
 
-## ☁️ Using MongoDB Atlas
-To switch to a shared Atlas cluster:
-1. Create a free-tier cluster on MongoDB Atlas.
-2. Whitelist your IP under **Network Access**.
-3. Add a database user under **Database Access** (read/write).
-4. Update `appsettings.Development.json`:
-    ```json
-    "MongoDB": {
-      "ConnectionString": "mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/IssueDb?retryWrites=true&w=majority",
-      "Database": "IssueDb"
-    }
-    ```
-5. Restart the API (`dotnet run`).
+### Future Integrations
+- **Mobile App**: Will consume issue data via API Gateway.
 
-## 📱 Sample API Usage
-**List all issues**
-```http
-GET /issues
-```
-**Report a new issue**
-```http
-POST /issues/report
-Content-Type: application/json
+---
 
-{
-  "title": "Example",
-  "description": "Details",
-  "category": "Infrastructure",
-  "photoUrl": "https://...",
-  "userId": "user1",
-  "departmentId": 2,
-  "latitude": 41.0,
-  "longitude": 29.0
-}
-```
+## 🔍 Troubleshooting
 
-## 🔥 Key Concepts Used
-- Aggregate Root (Issue)
-- Domain Events with MediatR
-- MongoDB for persistence
-- RabbitMQ for messaging
-- Swagger for API documentation
+### Common Issues
+
+#### RabbitMQ Connection Problems
+- Check if RabbitMQ container is running: `docker-compose ps rabbitmq`
+- Verify RabbitMQ credentials match in both `docker-compose.yml` and service config (`appsettings.json`).
+- Check logs for connection errors: `docker-compose logs -f issue-service | grep "RabbitMQ"`
+- Ensure queue names in `appsettings.json` are correct.
+
+#### MongoDB Connection Issues
+- Verify MongoDB Atlas connection string (including username/password).
+- Check if IP address is whitelisted in MongoDB Atlas.
+- Test connection using MongoDB Compass.
+
+#### Service Won't Start
+- Check service dependencies (especially RabbitMQ health check in `docker-compose.yml`).
+- Verify environment variables in `docker-compose.yml`.
+- Check for port conflicts on the host machine.
+
+---
+
+## 🔜 Planned Enhancements
+
+1. **Caching Layer**: Redis integration to improve read performance.
+2. **Issue Status History**: Track all status changes with timestamps and user who made the change.
+3. **Image Optimization**: Resize and compress uploaded images.
+4. **Full-text Search**: Implement search functionality across issue descriptions.
+5. **Event Versioning**: Add schema versioning to RabbitMQ messages for better evolution.
+6. **User Identification in Events**: Consistently include `UserId` or `ActorId` in status change events.
 
 # 🌟 Summary
-IssueService is a .NET 8 microservice using DDD principles to report and track issues with event-driven notifications.
+IssueService is a .NET 8 microservice using DDD principles to report and track issues with event-driven notifications for creation and status updates via RabbitMQ.

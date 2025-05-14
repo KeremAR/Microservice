@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 using IssueService.Messaging.Interfaces;
 using System.Threading;
+using System; // Added for Console.WriteLine
 
 namespace IssueService.Messaging.Implementations;
 
@@ -11,7 +12,8 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
 {
     private IConnection _connection;
     private IModel _channel;
-    private readonly string _queueName;
+    private readonly string _issueCreatedQueueName;
+    private readonly string _issueStatusChangedQueueName; // New queue name
     private readonly IConfiguration _configuration;
     private readonly int _maxRetries = 5;
     private readonly int _retryDelayMs = 2000; // 2 seconds
@@ -19,9 +21,10 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
     public RabbitMQProducer(IConfiguration configuration)
     {
         _configuration = configuration;
-        _queueName = configuration["RabbitMQ:QueueName"] ?? "issue_created";
+        _issueCreatedQueueName = configuration["RabbitMQ:QueueName"] ?? "issue_created";
+        // Read the new queue name from configuration, default to "issue_status_changed"
+        _issueStatusChangedQueueName = configuration["RabbitMQ:IssueStatusChangedQueueName"] ?? "issue_status_changed";
         
-        // Try to connect to RabbitMQ with retries
         ConnectToRabbitMQ();
     }
 
@@ -47,15 +50,25 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
                 _connection = factory.CreateConnection();
                 _channel = _connection.CreateModel();
 
-                // Declare the queue
+                // Declare the issue_created queue
                 _channel.QueueDeclare(
-                    queue: _queueName,
+                    queue: _issueCreatedQueueName,
                     durable: true,
                     exclusive: false,
                     autoDelete: false,
                     arguments: null);
+                Console.WriteLine($"✨ Successfully declared queue: {_issueCreatedQueueName}");
 
-                Console.WriteLine($"✨ Successfully connected to RabbitMQ and declared queue: {_queueName}");
+                // Declare the issue_status_changed queue
+                _channel.QueueDeclare(
+                    queue: _issueStatusChangedQueueName,
+                    durable: true,
+                    exclusive: false,
+                    autoDelete: false,
+                    arguments: null);
+                Console.WriteLine($"✨ Successfully declared queue: {_issueStatusChangedQueueName}");
+
+                Console.WriteLine($"✨ Successfully connected to RabbitMQ and declared queues.");
                 connected = true;
             }
             catch (Exception ex)
@@ -71,8 +84,6 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
                 else
                 {
                     Console.WriteLine("Maximum retry attempts reached. Failed to connect to RabbitMQ.");
-                    // Still create the connection objects as null so the service can start
-                    // but operations will fail until RabbitMQ is available
                 }
             }
         }
@@ -80,18 +91,26 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
 
     public void PublishIssueCreated(object message)
     {
+        PublishMessage(_issueCreatedQueueName, message);
+    }
+
+    public void PublishIssueStatusChanged(object message)
+    {
+        PublishMessage(_issueStatusChangedQueueName, message);
+    }
+
+    private void PublishMessage(string queueName, object message)
+    {
         try
         {
-            // Check if we need to reconnect
             if (_channel == null || _connection == null || !_connection.IsOpen)
             {
                 Console.WriteLine("RabbitMQ connection is not available. Attempting to reconnect...");
                 ConnectToRabbitMQ();
                 
-                // If we still couldn't connect, log and return
                 if (_channel == null || _connection == null || !_connection.IsOpen)
                 {
-                    Console.WriteLine("❌ Cannot publish message - RabbitMQ connection is not available");
+                    Console.WriteLine($"❌ Cannot publish message to {queueName} - RabbitMQ connection is not available");
                     return;
                 }
             }
@@ -103,15 +122,15 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
 
             _channel.BasicPublish(
                 exchange: "",
-                routingKey: _queueName,
+                routingKey: queueName,
                 basicProperties: null,
                 body: body);
 
-            Console.WriteLine($"✨ Message published to queue {_queueName} successfully");
+            Console.WriteLine($"✨ Message published to queue {queueName} successfully: {json}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error publishing message to RabbitMQ: {ex.Message}");
+            Console.WriteLine($"❌ Error publishing message to queue {queueName}: {ex.Message}");
         }
     }
 
@@ -128,5 +147,6 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
         {
             Console.WriteLine($"Error during RabbitMQ disposal: {ex.Message}");
         }
+        GC.SuppressFinalize(this); // Added to follow IDisposable pattern properly
     }
 } 

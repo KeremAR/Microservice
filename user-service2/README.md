@@ -81,6 +81,63 @@ The service requires the following environment variables:
 DATABASE_URL=postgresql://postgres:postgres@postgres:5432/userdb
 ```
 
+## Testing
+
+The service includes comprehensive test coverage:
+
+### Unit Tests
+Unit tests validate individual components and models in isolation.
+
+```bash
+# Run only unit tests
+pytest tests/unit/
+```
+
+### Integration Tests
+Integration tests validate API endpoints and inter-component functionality.
+
+```bash
+# Run only integration tests
+pytest tests/integration/
+```
+
+### Contract Tests
+Contract tests ensure API responses conform to specified schemas.
+
+```bash
+# Run contract tests
+pytest tests/integration/test_contract.py
+```
+
+### Running All Tests
+```bash
+# Run all tests with coverage report
+pytest --cov=./ --cov-report=html
+```
+
+## CI/CD Pipeline
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+### Pipeline Stages
+
+1. **Test**: Runs all unit and integration tests
+2. **Lint**: Ensures code quality with flake8 and black
+3. **Build**: Creates and pushes a Docker image to GitHub Container Registry
+4. **Deploy**: Deploys the application to the target environment
+
+The pipeline automatically runs on:
+- Every push to main/master branch
+- Every pull request to main/master branch
+
+### Setting Up GitHub Actions
+
+1. Make sure your repository has the GitHub Actions feature enabled
+2. The workflow configuration is already defined in `.github/workflows/ci-cd.yml`
+3. For deployment to work, you might need to add the following secrets:
+   - `DOCKER_USERNAME` and `DOCKER_PASSWORD` (if using Docker Hub)
+   - Environment-specific credentials (for deployment)
+
 ## Domain Events
 
 The service publishes the following domain events to the RabbitMQ message broker:

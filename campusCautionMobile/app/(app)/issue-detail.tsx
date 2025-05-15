@@ -9,7 +9,8 @@ import {
   Animated,
   Pressable,
   ActivityIndicator,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -716,6 +717,36 @@ export default function IssueDetailScreen() {
               </View>
             </View>
           </View>
+          
+          {/* Photo Section - Only shown if photo exists */}
+          {issue.photoUrl && (
+            <View style={{ paddingHorizontal: 16, marginTop: 0, marginBottom: 32 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ backgroundColor: '#E0F2FE', padding: 8, borderRadius: 8, marginRight: 8 }}>
+                  <Ionicons name="image" size={16} color="#0284C7" />
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: '600' }}>Photo</Text>
+              </View>
+              
+              <View
+                style={{
+                  ...styles.cardShadow,
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  backgroundColor: 'white'
+                }}
+              >
+                <Image 
+                  source={{ uri: issue.photoUrl }} 
+                  style={{ 
+                    width: '100%', 
+                    height: 250,
+                    resizeMode: 'contain'
+                  }}
+                />
+              </View>
+            </View>
+          )}
         </Animated.View>
       </Animated.ScrollView>
       

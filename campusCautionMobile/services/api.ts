@@ -455,12 +455,25 @@ export const markNotificationAsRead = async (token: string, userId: string, noti
     
     console.log('API yanıtı alındı');
     console.log('Status kodu:', response.status);
+    console.log('Status metni:', response.statusText || 'No status text');
     
     const responseText = await response.text();
+    console.log('Notification mark as read response:', responseText);
+    
     let data;
     
     try {
       data = responseText ? JSON.parse(responseText) : null;
+      console.log('Parsed mark as read response:', data);
+      
+      // If the backend response contains notification details
+      if (data && data.id) {
+        console.log('Successfully marked notification as read:', 
+          `id=${data.id}`, 
+          `isRead=${data.isRead !== undefined ? data.isRead : 'undefined'}`,
+          `read=${data.read !== undefined ? data.read : 'undefined'}`
+        );
+      }
     } catch (e) {
       console.error('JSON parse hatası:', e);
       return false;

@@ -18,6 +18,7 @@ import { getNotifications, markNotificationAsRead, deleteNotification } from '..
 import { useFocusEffect } from '@react-navigation/native';
 import { sendLocalNotification } from '../../services/notificationService';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useRouter } from 'expo-router';
 
 // Define notification types
 type NotificationType = 'status-update' | 'announcement' | 'alert' | 'ISSUE_CREATED' | 'ISSUE_STATUS_CHANGED' | string;
@@ -96,7 +97,7 @@ const formatDate = (dateString: string): string => {
   
   // If it's today, show time with "Today" prefix
   if (date.toDateString() === now.toDateString()) {
-    return `Bugün, ${date.toLocaleTimeString('tr-TR', {
+    return `Today, ${date.toLocaleTimeString('en-US', {
       hour: '2-digit', 
       minute: '2-digit'
     })}`;
@@ -106,7 +107,7 @@ const formatDate = (dateString: string): string => {
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   if (date.toDateString() === yesterday.toDateString()) {
-    return `Dün, ${date.toLocaleTimeString('tr-TR', {
+    return `Yesterday, ${date.toLocaleTimeString('en-US', {
       hour: '2-digit', 
       minute: '2-digit'
     })}`;
@@ -116,20 +117,20 @@ const formatDate = (dateString: string): string => {
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
   if (date > oneWeekAgo) {
-    return `${date.toLocaleDateString('tr-TR', {
+    return `${date.toLocaleDateString('en-US', {
       weekday: 'long'
-    })}, ${date.toLocaleTimeString('tr-TR', {
+    })}, ${date.toLocaleTimeString('en-US', {
       hour: '2-digit', 
       minute: '2-digit'
     })}`;
   }
   
   // Otherwise show full date with time
-  return `${date.toLocaleDateString('tr-TR', {
+  return `${date.toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  })}, ${date.toLocaleTimeString('tr-TR', {
+  })}, ${date.toLocaleTimeString('en-US', {
     hour: '2-digit', 
     minute: '2-digit'
   })}`;
@@ -137,6 +138,7 @@ const formatDate = (dateString: string): string => {
 
 export default function NotificationsScreen() {
   const { token, user } = useAuth();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -145,7 +147,7 @@ export default function NotificationsScreen() {
   // API'den bildirimleri alma
   const fetchNotifications = useCallback(async () => {
     if (!token) {
-      setError('Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.');
+      setError('Session information not found. Please log in again.');
       setLoading(false);
       return;
     }
@@ -154,18 +156,31 @@ export default function NotificationsScreen() {
       setError(null);
       const fetchedNotifications = await getNotifications(token);
       
+      console.log('Fetched notifications raw data:', JSON.stringify(fetchedNotifications).substring(0, 300) + '...');
+      
       // Backend'den gelen verileri UI formatına dönüştür
-      const formattedNotifications = fetchedNotifications.map((notification: any) => ({
-        id: notification.id,
-        title: notification.title || 'Bildirim',
-        message: notification.message,
-        description: notification.message, // UI uyumluluğu için
-        createdAt: notification.createdAt,
-        type: notification.type || 'status-update',
-        isRead: notification.isRead || false,
-        userId: notification.userId,
-        data: notification.data
-      }));
+      const formattedNotifications = fetchedNotifications.map((notification: any) => {
+        // Debug each notification structure
+        console.log(`Notification ${notification.id} read property:`, 
+          notification.isRead !== undefined ? 'isRead: ' + notification.isRead : 
+          notification.read !== undefined ? 'read: ' + notification.read : 
+          'no read status'
+        );
+        
+        return {
+          id: notification.id,
+          title: notification.title || 'Notification',
+          message: notification.message,
+          description: notification.message, // UI uyumluluğu için
+          createdAt: notification.createdAt,
+          type: notification.type || 'status-update',
+          // Backend'de 'isRead' veya 'read' olarak gelebilir, ikisini de kontrol et
+          isRead: notification.isRead !== undefined ? notification.isRead : 
+                 notification.read !== undefined ? notification.read : false,
+          userId: notification.userId,
+          data: notification.data
+        };
+      });
       
       // Bildirimleri tarihe göre sırala (en yeni en üstte)
       const sortedNotifications = formattedNotifications.sort((a: Notification, b: Notification) => {
@@ -173,65 +188,82 @@ export default function NotificationsScreen() {
       });
       
       setNotifications(sortedNotifications);
+      console.log(`Loaded ${sortedNotifications.length} notifications, with ${sortedNotifications.filter((n: Notification) => !n.isRead).length} unread`);
     } catch (err) {
-      console.error('Bildirimler alınırken hata oluştu:', err);
-      setError('Bildirimler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+      console.error('Error loading notifications:', err);
+      setError('An error occurred while loading notifications. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [token]);
 
-  // Bildirimi okundu olarak işaretleme
+  // Bildirimi okundu olarak işaretleme ve ilgili issue sayfasına yönlendirme
   const handleNotificationPress = async (notification: Notification) => {
     if (!token || !user?.id) {
-      Alert.alert('Hata', 'Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.');
+      Alert.alert('Error', 'Session information not found. Please log in again.');
       return;
     }
 
-    if (notification.isRead) return; // Zaten okunmuşsa işlem yapma
-
     try {
-      const success = await markNotificationAsRead(token, user.id, notification.id);
-      
-      if (success) {
-        // Bildirimi yerel listede de güncelle
-        setNotifications(currentNotifications => 
-          currentNotifications.map(item => 
-            item.id === notification.id 
-              ? { ...item, isRead: true } 
-              : item
-          )
-        );
+      // Bildirim daha önce okunmamışsa okundu olarak işaretle
+      if (!notification.isRead) {
+        const success = await markNotificationAsRead(token, user.id, notification.id);
         
-        // Verify the change with backend
-        setTimeout(() => {
-          fetchNotifications();
-        }, 500);
+        if (success) {
+          // Bildirimi yerel listede de güncelle
+          setNotifications(currentNotifications => 
+            currentNotifications.map(item => 
+              item.id === notification.id 
+                ? { ...item, isRead: true } 
+                : item
+            )
+          );
+          
+          // Verify the change with backend
+          setTimeout(() => {
+            fetchNotifications();
+          }, 500);
+        }
+      }
+      
+      // Bildirim data içeriyor mu kontrol et
+      if (notification.data) {
+        // Issue ID'yi bulmaya çalış
+        const issueId = notification.data.Id || notification.data.id;
+        
+        if (issueId) {
+          console.log(`Navigating to issue details for ID: ${issueId}`);
+          router.push(`/issue-detail?id=${issueId}`);
+        } else {
+          console.log('Issue ID not found in notification:', notification);
+        }
+      } else {
+        console.log('No data found in notification for navigation:', notification);
       }
     } catch (err) {
-      console.error('Bildirim okundu işaretlenirken hata:', err);
-      Alert.alert('Hata', 'Bildirim durumu güncellenirken bir hata oluştu.');
+      console.error('Notification processing error:', err);
+      Alert.alert('Error', 'An error occurred while processing the notification.');
     }
   };
 
   // Bildirimi silme
   const handleDeleteNotification = async (notification: Notification) => {
     if (!token || !user?.id) {
-      Alert.alert('Hata', 'Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.');
+      Alert.alert('Error', 'Session information not found. Please log in again.');
       return;
     }
 
     Alert.alert(
-      'Bildirimi Sil',
-      'Bu bildirimi silmek istediğinize emin misiniz?',
+      'Delete Notification',
+      'Are you sure you want to delete this notification?',
       [
         {
-          text: 'İptal',
+          text: 'Cancel',
           style: 'cancel'
         },
         {
-          text: 'Sil',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -247,13 +279,13 @@ export default function NotificationsScreen() {
                 fetchNotifications();
                 
                 // Kullanıcıya bildir
-                Alert.alert('Başarılı', 'Bildirim başarıyla silindi.');
+                Alert.alert('Success', 'Notification successfully deleted.');
               } else {
-                Alert.alert('Hata', 'Bildirim silinirken bir sorun oluştu.');
+                Alert.alert('Error', 'There was a problem deleting the notification.');
               }
             } catch (err) {
-              console.error('Bildirim silinirken hata:', err);
-              Alert.alert('Hata', 'Bildirim silinirken bir hata oluştu.');
+              console.error('Error deleting notification:', err);
+              Alert.alert('Error', 'An error occurred while deleting the notification.');
             }
           }
         }
@@ -278,14 +310,14 @@ export default function NotificationsScreen() {
   const sendTestNotification = async () => {
     try {
       await sendLocalNotification(
-        'Test Bildirimi',
-        'Bu bir test bildirimidir. Bildirim sistemi çalışıyor!',
+        'Test Notification',
+        'This is a test notification. The notification system is working!',
         { notificationId: 'test-notification' }
       );
-      Alert.alert('Başarılı', 'Test bildirimi gönderildi! Bildirim çekmecesini kontrol edin.');
+      Alert.alert('Success', 'Test notification sent! Check the notification drawer.');
     } catch (error) {
-      console.error('Test bildirimi gönderilirken hata:', error);
-      Alert.alert('Hata', 'Test bildirimi gönderilirken bir hata oluştu.');
+      console.error('Error sending test notification:', error);
+      Alert.alert('Error', 'An error occurred while sending the test notification.');
     }
   };
 
@@ -294,7 +326,7 @@ export default function NotificationsScreen() {
       return (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#1e40af" />
-          <Text style={styles.loadingText}>Bildirimler yükleniyor...</Text>
+          <Text style={styles.loadingText}>Loading notifications...</Text>
         </View>
       );
     }
@@ -305,7 +337,7 @@ export default function NotificationsScreen() {
           <Ionicons name="alert-circle" size={40} color="#ef4444" />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => fetchNotifications()}>
-            <Text style={styles.retryButtonText}>Tekrar Dene</Text>
+            <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       );
@@ -316,7 +348,7 @@ export default function NotificationsScreen() {
         <View style={styles.emptyContainer}>
           <Ionicons name="notifications-off" size={40} color="#9ca3af" />
           <Text style={styles.emptyText}>
-            Henüz bildiriminiz bulunmuyor.
+            You don't have any notifications yet.
           </Text>
         </View>
       );
@@ -330,7 +362,7 @@ export default function NotificationsScreen() {
               style={styles.deleteAction}
               onPress={() => handleDeleteNotification(notification)}
             >
-              <Text style={styles.deleteActionText}>Sil</Text>
+              <Text style={styles.deleteActionText}>Delete</Text>
             </TouchableOpacity>
           );
           
@@ -397,7 +429,7 @@ export default function NotificationsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
-          Bildirimler
+          Notifications
         </Text>
         
         {/* Test bildirim butonu */}
@@ -406,7 +438,7 @@ export default function NotificationsScreen() {
           onPress={sendTestNotification}
         >
           <Ionicons name="notifications" size={18} color="white" />
-          <Text style={styles.testButtonText}>Test Bildirim</Text>
+          <Text style={styles.testButtonText}>Test Notification</Text>
         </TouchableOpacity>
       </View>
       

@@ -6,9 +6,18 @@ import * as nodemailer from 'nodemailer';
 import { NotificationEventPublisher } from './domain/events/notification.event.publisher';
 import { NotificationCreatedEvent, NotificationReadEvent, NotificationDeletedEvent } from './domain/events/notification.event';
 
+export interface CreateNotificationDto {
+  userId: string;
+  title: string;
+  message: string;
+  type: string;
+  data?: any;
+}
+
 @Injectable()
 export class NotificationService {
   private transporter: nodemailer.Transporter | null = null;
+  private notifications: Map<string, any[]> = new Map();
 
   constructor(
     @InjectRepository(Notification)
@@ -46,74 +55,72 @@ export class NotificationService {
     }
   }
 
-  async createNotification(userId: string, title: string, message: string) {
-    const notification = this.notificationRepository.create({
+  async createNotification(createNotificationDto: CreateNotificationDto) {
+    const { userId, title, message, type, data } = createNotificationDto;
+    
+    // Entity oluştur
+    const notificationEntity = this.notificationRepository.create({
       userId,
       title,
       message,
+      isRead: false,
+      createdAt: new Date(),
     });
+    // Veritabanına kaydet
+    const savedNotification = await this.notificationRepository.save(notificationEntity);
 
-    const savedNotification = await this.notificationRepository.save(notification);
-
-    try {
-      await this.eventPublisher.publish(
-        new NotificationCreatedEvent(
-          savedNotification.id,
-          userId,
-          title,
-          message
-        )
-      );
-    } catch (error) {
-      console.error('Failed to publish notification created event:', error);
+    // Bellekte de tutmak istersen (opsiyonel, mevcut kodu koruyorum)
+    const notification = {
+      id: savedNotification.id,
+      userId,
+      title,
+      message,
+      type,
+      data,
+      createdAt: savedNotification.createdAt,
+      read: false,
+    };
+    if (!this.notifications.has(userId)) {
+      this.notifications.set(userId, []);
     }
-
-    // Send email notification asynchronously
-    this.sendEmail(userId, title, message).catch(error => {
-      console.error('Failed to send email notification:', error);
-    });
-
-    return savedNotification;
-  }
-
-  async getNotifications(userId: string) {
-    return this.notificationRepository.find({
-      where: { userId },
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  async markAsRead(notificationId: string, userId: string) {
-    await this.notificationRepository.update(notificationId, { isRead: true });
-    
-    const notification = await this.notificationRepository.findOne({ 
-      where: { id: notificationId } 
-    });
-
-    if (!notification) {
-      throw new NotFoundException(`Notification with ID ${notificationId} not found`);
-    }
-
-    try {
-      await this.eventPublisher.publish(
-        new NotificationReadEvent(notificationId, userId)
-      );
-    } catch (error) {
-      console.error('Failed to publish notification read event:', error);
-    }
-
+    this.notifications.get(userId).push(notification);
+    console.log(`Notification created for user ${userId}:`, notification);
     return notification;
   }
 
-  async deleteNotification(notificationId: string, userId: string) {
-    await this.notificationRepository.delete(notificationId);
-    
-    try {
-      await this.eventPublisher.publish(
-        new NotificationDeletedEvent(notificationId, userId)
-      );
-    } catch (error) {
-      console.error('Failed to publish notification deleted event:', error);
+  async getNotificationsByUserId(userId: string) {
+    return this.notifications.get(userId) || [];
+  }
+
+  async markNotificationAsRead(userId: string, notificationId: string) {
+    const userNotifications = this.notifications.get(userId);
+    if (!userNotifications) {
+      return null;
     }
+
+    const notification = userNotifications.find(n => n.id === notificationId);
+    if (notification) {
+      notification.read = true;
+      return notification;
+    }
+
+    return null;
+  }
+
+  async deleteNotification(userId: string, notificationId: string) {
+    const userNotifications = this.notifications.get(userId);
+    if (!userNotifications) {
+      return false;
+    }
+
+    const initialLength = userNotifications.length;
+    const filteredNotifications = userNotifications.filter(n => n.id !== notificationId);
+    
+    if (filteredNotifications.length !== initialLength) {
+      this.notifications.set(userId, filteredNotifications);
+      return true;
+    }
+
+    return false;
   }
 } 

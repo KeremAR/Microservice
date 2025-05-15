@@ -421,10 +421,29 @@ export const getNotifications = async (token: string) => {
 export const markNotificationAsRead = async (token: string, userId: string, notificationId: string) => {
   try {
     console.log('-------- API: markNotificationAsRead çağrıldı --------');
-    console.log(`UserId: ${userId}, NotificationId: ${notificationId}`);
+    
+    // Extract userId from token (JWT parsing) instead of using the provided userId
+    let extractedUserId = '';
+    if (token && token.split('.').length === 3) {
+      try {
+        // Decode JWT token payload
+        const base64Payload = token.split('.')[1];
+        const payload = JSON.parse(atob(base64Payload));
+        
+        // Get userId from token claims
+        extractedUserId = payload.uid || payload.sub || payload.user_id || '';
+        console.log('Extracted userId from token for marking read:', extractedUserId);
+      } catch (e) {
+        console.error('Token parsing error:', e);
+      }
+    }
+    
+    // Use extracted userId instead of the passed userId parameter
+    const effectiveUserId = extractedUserId || userId;
+    console.log(`UserId from param: ${userId}, Using userId: ${effectiveUserId}, NotificationId: ${notificationId}`);
     
     // Gateway üzerinden yönlendirme için URL
-    const url = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.MARK_READ(notificationId, userId)}`;
+    const url = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.MARK_READ(notificationId, effectiveUserId)}`;
     console.log('API URL for marking notification as read:', url);
     
     const response = await fetch(url, {
@@ -639,10 +658,29 @@ export const getIssueDetails = async (token: string, issueId: string) => {
 export const deleteNotification = async (token: string, userId: string, notificationId: string) => {
   try {
     console.log('-------- API: deleteNotification çağrıldı --------');
-    console.log(`UserId: ${userId}, NotificationId: ${notificationId}`);
+    
+    // Extract userId from token (JWT parsing) instead of using the provided userId
+    let extractedUserId = '';
+    if (token && token.split('.').length === 3) {
+      try {
+        // Decode JWT token payload
+        const base64Payload = token.split('.')[1];
+        const payload = JSON.parse(atob(base64Payload));
+        
+        // Get userId from token claims
+        extractedUserId = payload.uid || payload.sub || payload.user_id || '';
+        console.log('Extracted userId from token for deletion:', extractedUserId);
+      } catch (e) {
+        console.error('Token parsing error:', e);
+      }
+    }
+    
+    // Use extracted userId instead of the passed userId parameter
+    const effectiveUserId = extractedUserId || userId;
+    console.log(`UserId from param: ${userId}, Using userId: ${effectiveUserId}, NotificationId: ${notificationId}`);
     
     // Gateway üzerinden yönlendirme için URL
-    const url = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.DELETE(notificationId, userId)}`;
+    const url = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.DELETE(notificationId, effectiveUserId)}`;
     console.log('API URL for deleting notification:', url);
     
     const response = await fetch(url, {

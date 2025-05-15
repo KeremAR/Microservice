@@ -7,13 +7,17 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
-  Alert
+  Alert,
+  Animated,
+  PanResponder,
+  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { getNotifications, markNotificationAsRead, deleteNotification } from '../../services/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { sendLocalNotification } from '../../services/notificationService';
+import { Swipeable } from 'react-native-gesture-handler';
 
 // Define notification types
 type NotificationType = 'status-update' | 'announcement' | 'alert' | 'ISSUE_CREATED' | 'ISSUE_STATUS_CHANGED' | string;
@@ -90,28 +94,45 @@ const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
   const now = new Date();
   
-  // If it's today, show time
+  // If it's today, show time with "Today" prefix
   if (date.toDateString() === now.toDateString()) {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return `Bugün, ${date.toLocaleTimeString('tr-TR', {
+      hour: '2-digit', 
+      minute: '2-digit'
+    })}`;
   }
   
-  // If it's within the last week, show day name
+  // If it's yesterday, show "Yesterday" with time
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) {
+    return `Dün, ${date.toLocaleTimeString('tr-TR', {
+      hour: '2-digit', 
+      minute: '2-digit'
+    })}`;
+  }
+  
+  // If it's within the last week, show day name with time
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
   if (date > oneWeekAgo) {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-    });
+    return `${date.toLocaleDateString('tr-TR', {
+      weekday: 'long'
+    })}, ${date.toLocaleTimeString('tr-TR', {
+      hour: '2-digit', 
+      minute: '2-digit'
+    })}`;
   }
   
-  // Otherwise show date
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
+  // Otherwise show full date with time
+  return `${date.toLocaleDateString('tr-TR', {
     day: 'numeric',
-  });
+    month: 'long',
+    year: 'numeric',
+  })}, ${date.toLocaleTimeString('tr-TR', {
+    hour: '2-digit', 
+    minute: '2-digit'
+  })}`;
 };
 
 export default function NotificationsScreen() {
@@ -146,7 +167,12 @@ export default function NotificationsScreen() {
         data: notification.data
       }));
       
-      setNotifications(formattedNotifications);
+      // Bildirimleri tarihe göre sırala (en yeni en üstte)
+      const sortedNotifications = formattedNotifications.sort((a: Notification, b: Notification) => {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      
+      setNotifications(sortedNotifications);
     } catch (err) {
       console.error('Bildirimler alınırken hata oluştu:', err);
       setError('Bildirimler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
@@ -177,6 +203,11 @@ export default function NotificationsScreen() {
               : item
           )
         );
+        
+        // Verify the change with backend
+        setTimeout(() => {
+          fetchNotifications();
+        }, 500);
       }
     } catch (err) {
       console.error('Bildirim okundu işaretlenirken hata:', err);
@@ -211,6 +242,9 @@ export default function NotificationsScreen() {
                 setNotifications(currentNotifications => 
                   currentNotifications.filter(item => item.id !== notification.id)
                 );
+                
+                // Update from backend to ensure sync
+                fetchNotifications();
                 
                 // Kullanıcıya bildir
                 Alert.alert('Başarılı', 'Bildirim başarıyla silindi.');
@@ -270,7 +304,7 @@ export default function NotificationsScreen() {
         <View style={styles.centerContent}>
           <Ionicons name="alert-circle" size={40} color="#ef4444" />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchNotifications}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchNotifications()}>
             <Text style={styles.retryButtonText}>Tekrar Dene</Text>
           </TouchableOpacity>
         </View>
@@ -290,64 +324,71 @@ export default function NotificationsScreen() {
 
     return (
       <View style={styles.content}>
-        {notifications.map((notification) => (
-          <React.Fragment key={notification.id}>
-            <TouchableOpacity
-              style={[
-                styles.notificationCard,
-                !notification.isRead && styles.unreadCard
-              ]}
-              onPress={() => handleNotificationPress(notification)}
+        {notifications.map((notification) => {
+          const renderRightActions = () => (
+            <TouchableOpacity 
+              style={styles.deleteAction}
+              onPress={() => handleDeleteNotification(notification)}
             >
-              <View style={styles.notificationContent}>
-                <View 
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: `${getNotificationColor(notification.type)}20` }
-                  ]}
-                >
-                  <Ionicons 
-                    name={getNotificationIcon(notification.type) as any} 
-                    size={20} 
-                    color={getNotificationColor(notification.type)} 
-                  />
-                </View>
-                
-                <View style={styles.textContainer}>
-                  <View style={styles.notificationHeader}>
-                    <Text style={[
-                      styles.title,
-                      !notification.isRead && styles.boldText
-                    ]}>
-                      {notification.title}
-                    </Text>
-                    <Text style={styles.timestamp}>
-                      {formatDate(notification.createdAt)}
-                    </Text>
-                  </View>
-                  
-                  <Text 
+              <Text style={styles.deleteActionText}>Sil</Text>
+            </TouchableOpacity>
+          );
+          
+          return (
+            <Swipeable
+              key={notification.id}
+              renderRightActions={renderRightActions}
+              friction={2}
+              overshootRight={false}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.notificationCard,
+                  !notification.isRead && styles.unreadCard
+                ]}
+                onPress={() => handleNotificationPress(notification)}
+              >
+                <View style={styles.notificationContent}>
+                  <View 
                     style={[
-                      styles.description,
-                      !notification.isRead && styles.unreadDescription
+                      styles.iconContainer,
+                      { backgroundColor: `${getNotificationColor(notification.type)}20` }
                     ]}
                   >
-                    {notification.message || notification.description}
-                  </Text>
+                    <Ionicons 
+                      name={getNotificationIcon(notification.type) as any} 
+                      size={20} 
+                      color={getNotificationColor(notification.type)} 
+                    />
+                  </View>
+                  
+                  <View style={styles.textContainer}>
+                    <View style={styles.notificationHeader}>
+                      <Text style={[
+                        styles.title,
+                        !notification.isRead && styles.boldText
+                      ]}>
+                        {notification.title}
+                      </Text>
+                      <Text style={styles.timestamp}>
+                        {formatDate(notification.createdAt)}
+                      </Text>
+                    </View>
+                    
+                    <Text 
+                      style={[
+                        styles.description,
+                        !notification.isRead && styles.unreadDescription
+                      ]}
+                    >
+                      {notification.message || notification.description}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-              
-              {/* Bildirim silme butonu ekle */}
-              <TouchableOpacity 
-                style={styles.deleteButton}
-                onPress={() => handleDeleteNotification(notification)}
-              >
-                <Ionicons name="trash-outline" size={18} color="#ef4444" />
               </TouchableOpacity>
-            </TouchableOpacity>
-            <View style={styles.divider} />
-          </React.Fragment>
-        ))}
+            </Swipeable>
+          );
+        })}
       </View>
     );
   };
@@ -474,33 +515,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
+    width: '100%',
   },
   title: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 2,
+    color: '#374151',
   },
   boldText: {
     fontWeight: 'bold',
+    color: '#1f2937',
   },
   timestamp: {
-    fontSize: 12,
-    color: '#9ca3af',
+    fontSize: 13,
+    color: '#6b7280',
+    marginLeft: 8,
   },
   description: {
     fontSize: 14, 
     color: '#6b7280',
+    lineHeight: 19,
   },
   unreadDescription: {
     color: '#111827',
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#e5e7eb',
+  deleteAction: {
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
   },
-  deleteButton: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    padding: 8,
+  deleteActionText: {
+    color: 'white',
+    fontWeight: 'bold',
+    padding: 20,
   },
   testButton: {
     flexDirection: 'row',

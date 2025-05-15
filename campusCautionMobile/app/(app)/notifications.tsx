@@ -18,6 +18,7 @@ import { getNotifications, markNotificationAsRead, deleteNotification } from '..
 import { useFocusEffect } from '@react-navigation/native';
 import { sendLocalNotification } from '../../services/notificationService';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useRouter } from 'expo-router';
 
 // Define notification types
 type NotificationType = 'status-update' | 'announcement' | 'alert' | 'ISSUE_CREATED' | 'ISSUE_STATUS_CHANGED' | string;
@@ -137,6 +138,7 @@ const formatDate = (dateString: string): string => {
 
 export default function NotificationsScreen() {
   const { token, user } = useAuth();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -154,18 +156,31 @@ export default function NotificationsScreen() {
       setError(null);
       const fetchedNotifications = await getNotifications(token);
       
+      console.log('Fetched notifications raw data:', JSON.stringify(fetchedNotifications).substring(0, 300) + '...');
+      
       // Backend'den gelen verileri UI formatına dönüştür
-      const formattedNotifications = fetchedNotifications.map((notification: any) => ({
-        id: notification.id,
-        title: notification.title || 'Bildirim',
-        message: notification.message,
-        description: notification.message, // UI uyumluluğu için
-        createdAt: notification.createdAt,
-        type: notification.type || 'status-update',
-        isRead: notification.isRead || false,
-        userId: notification.userId,
-        data: notification.data
-      }));
+      const formattedNotifications = fetchedNotifications.map((notification: any) => {
+        // Debug each notification structure
+        console.log(`Notification ${notification.id} read property:`, 
+          notification.isRead !== undefined ? 'isRead: ' + notification.isRead : 
+          notification.read !== undefined ? 'read: ' + notification.read : 
+          'no read status'
+        );
+        
+        return {
+          id: notification.id,
+          title: notification.title || 'Bildirim',
+          message: notification.message,
+          description: notification.message, // UI uyumluluğu için
+          createdAt: notification.createdAt,
+          type: notification.type || 'status-update',
+          // Backend'de 'isRead' veya 'read' olarak gelebilir, ikisini de kontrol et
+          isRead: notification.isRead !== undefined ? notification.isRead : 
+                 notification.read !== undefined ? notification.read : false,
+          userId: notification.userId,
+          data: notification.data
+        };
+      });
       
       // Bildirimleri tarihe göre sırala (en yeni en üstte)
       const sortedNotifications = formattedNotifications.sort((a: Notification, b: Notification) => {
@@ -173,6 +188,7 @@ export default function NotificationsScreen() {
       });
       
       setNotifications(sortedNotifications);
+      console.log(`Loaded ${sortedNotifications.length} notifications, with ${sortedNotifications.filter((n: Notification) => !n.isRead).length} unread`);
     } catch (err) {
       console.error('Bildirimler alınırken hata oluştu:', err);
       setError('Bildirimler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
@@ -182,36 +198,52 @@ export default function NotificationsScreen() {
     }
   }, [token]);
 
-  // Bildirimi okundu olarak işaretleme
+  // Bildirimi okundu olarak işaretleme ve ilgili issue sayfasına yönlendirme
   const handleNotificationPress = async (notification: Notification) => {
     if (!token || !user?.id) {
       Alert.alert('Hata', 'Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.');
       return;
     }
 
-    if (notification.isRead) return; // Zaten okunmuşsa işlem yapma
-
     try {
-      const success = await markNotificationAsRead(token, user.id, notification.id);
-      
-      if (success) {
-        // Bildirimi yerel listede de güncelle
-        setNotifications(currentNotifications => 
-          currentNotifications.map(item => 
-            item.id === notification.id 
-              ? { ...item, isRead: true } 
-              : item
-          )
-        );
+      // Bildirim daha önce okunmamışsa okundu olarak işaretle
+      if (!notification.isRead) {
+        const success = await markNotificationAsRead(token, user.id, notification.id);
         
-        // Verify the change with backend
-        setTimeout(() => {
-          fetchNotifications();
-        }, 500);
+        if (success) {
+          // Bildirimi yerel listede de güncelle
+          setNotifications(currentNotifications => 
+            currentNotifications.map(item => 
+              item.id === notification.id 
+                ? { ...item, isRead: true } 
+                : item
+            )
+          );
+          
+          // Verify the change with backend
+          setTimeout(() => {
+            fetchNotifications();
+          }, 500);
+        }
+      }
+      
+      // Bildirim data içeriyor mu kontrol et
+      if (notification.data) {
+        // Issue ID'yi bulmaya çalış
+        const issueId = notification.data.Id || notification.data.id;
+        
+        if (issueId) {
+          console.log(`Navigating to issue details for ID: ${issueId}`);
+          router.push(`/issue-detail?id=${issueId}`);
+        } else {
+          console.log('Bildirimde ilgili issue ID bulunamadı:', notification);
+        }
+      } else {
+        console.log('Bildirimde navigasyon için data bulunamadı:', notification);
       }
     } catch (err) {
-      console.error('Bildirim okundu işaretlenirken hata:', err);
-      Alert.alert('Hata', 'Bildirim durumu güncellenirken bir hata oluştu.');
+      console.error('Bildirim işleme hatası:', err);
+      Alert.alert('Hata', 'Bildirim işlenirken bir hata oluştu.');
     }
   };
 

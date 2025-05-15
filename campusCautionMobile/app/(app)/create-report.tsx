@@ -329,8 +329,8 @@ export default function CreateReportScreen() {
       console.log('Foto yok, uyarı gösteriliyor');
       // Show confirmation dialog instead of just an alert
       Alert.alert(
-        'No Photos Added',
-        'Are you sure you want to continue without adding any photos?',
+        'No Photo Added',
+        'Are you sure you want to continue without adding a photo?',
         [
           {
             text: 'Cancel',
@@ -473,7 +473,8 @@ export default function CreateReportScreen() {
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        setPhotos([...photos, {
+        // Replace photos array with single photo instead of appending
+        setPhotos([{
           id: `camera_${Date.now()}`,
           uri: asset.uri,
           type: 'camera'
@@ -494,18 +495,18 @@ export default function CreateReportScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false, // Disable crop/edit step
         quality: 0.7,
-        allowsMultipleSelection: true,
-        selectionLimit: 5,
+        allowsMultipleSelection: false,
+        selectionLimit: 1,
       });
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newPhotos = result.assets.map(asset => ({
-          id: `gallery_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        const asset = result.assets[0];
+        // Replace photos array with single photo instead of mapping
+        setPhotos([{
+          id: `gallery_${Date.now()}`,
           uri: asset.uri,
           type: 'gallery' as const
-        }));
-        
-        setPhotos([...photos, ...newPhotos]);
+        }]);
       }
     } catch (error) {
       console.error('Error selecting from gallery:', error);
@@ -541,7 +542,7 @@ export default function CreateReportScreen() {
         return (
           <View style={{gap: 24, alignItems: 'center', padding: 20}}>
             <Text style={{textAlign: 'center', marginBottom: 16}}>
-              Please add at least one photo of the issue to help us better understand the problem.
+              Please add a photo of the issue to help us better understand the problem.
             </Text>
             
             {/* Single Add Photo Button - Mavi Tasarım */}
@@ -636,7 +637,7 @@ export default function CreateReportScreen() {
             {photos.length > 0 && (
               <View style={{gap: 16, width: '100%'}}>
                 <Text style={{color: '#047857', marginBottom: 8}}>
-                  {photos.length} photo{photos.length > 1 ? 's' : ''} added
+                  Photo added
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{flexDirection: 'row', gap: 8}}>

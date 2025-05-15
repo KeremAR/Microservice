@@ -57,6 +57,8 @@ export const getUserProfile = async (token: string) => {
 };
 
 // Yeni sorun/rapor oluşturma
+import { uploadMultipleImagesToFirebase } from './firebaseStorage';
+
 export const createIssue = async (token: string, issueData: {
   title: string;
   description: string;
@@ -101,16 +103,18 @@ export const createIssue = async (token: string, issueData: {
       console.log('Geçici test userId kullanılıyor:', userId);
     }
     
-    // Fotoğrafları base64'e dönüştür
-    let photoBase64 = '';
+    // Fotoğrafları Firebase Storage'a yükle ve URL'leri al
+    let photoUrl = '';
     
     if (issueData.photos.length > 0) {
       try {
-        // İlk fotoğrafı base64'e dönüştür
-        photoBase64 = await imageToBase64(issueData.photos[0]);
-        console.log('Fotoğraf base64\'e dönüştürüldü, uzunluk:', photoBase64.length);
+        console.log('Fotoğraflar Firebase Storage\'a yükleniyor...');
+        // Tüm fotoğrafları yükle (şu an için sadece ilkini kullanacağız)
+        const imageUrls = await uploadMultipleImagesToFirebase(issueData.photos);
+        photoUrl = imageUrls[0]; // İlk fotoğrafın URL'ini kullan
+        console.log('Firebase Storage fotoğraf URL\'i alındı:', photoUrl);
       } catch (e) {
-        console.error('Fotoğraf base64 dönüştürme hatası:', e);
+        console.error('Firebase Storage fotoğraf yükleme hatası:', e);
       }
     }
     
@@ -118,7 +122,7 @@ export const createIssue = async (token: string, issueData: {
       title: issueData.title,
       description: issueData.description,
       departmentId: departmentIdForBackend, // Eğer department seçilmediyse 0 gönder
-      PhotoUrl: photoBase64, // Backend PhotoUrl alanını bekliyor
+      PhotoUrl: photoUrl, // Backend PhotoUrl alanını bekliyor - artık Base64 yerine URL gönderiyoruz
       userId: userId, // Backend'in beklediği UserId alanı
       latitude: issueData.latitude || 0,
       longitude: issueData.longitude || 0,
@@ -127,7 +131,7 @@ export const createIssue = async (token: string, issueData: {
     
     console.log('Gönderilecek veri:', JSON.stringify({
       ...requestData,
-      PhotoUrl: photoBase64 ? `${photoBase64.substring(0, 20)}...` : 'boş' // Base64'ün tamamını loglamak yerine bir kısmını göster
+      PhotoUrl: photoUrl ? `${photoUrl.substring(0, 30)}...` : 'boş' // URL'in tamamını loglamak yerine bir kısmını göster
     }));
     console.log('Headers:', JSON.stringify(getAuthHeaders(token)));
     

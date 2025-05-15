@@ -247,7 +247,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="track"
         options={{
-          title: 'Track',
+          title: 'Issues',
         }}
       />
       {/* This is a placeholder screen for our "+" button */}
@@ -262,7 +262,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: 'Alerts',
+          title: 'Notifications',
         }}
       />
       <Tabs.Screen

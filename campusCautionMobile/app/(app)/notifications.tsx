@@ -97,7 +97,7 @@ const formatDate = (dateString: string): string => {
   
   // If it's today, show time with "Today" prefix
   if (date.toDateString() === now.toDateString()) {
-    return `Bugün, ${date.toLocaleTimeString('tr-TR', {
+    return `Today, ${date.toLocaleTimeString('en-US', {
       hour: '2-digit', 
       minute: '2-digit'
     })}`;
@@ -107,7 +107,7 @@ const formatDate = (dateString: string): string => {
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   if (date.toDateString() === yesterday.toDateString()) {
-    return `Dün, ${date.toLocaleTimeString('tr-TR', {
+    return `Yesterday, ${date.toLocaleTimeString('en-US', {
       hour: '2-digit', 
       minute: '2-digit'
     })}`;
@@ -117,20 +117,20 @@ const formatDate = (dateString: string): string => {
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
   if (date > oneWeekAgo) {
-    return `${date.toLocaleDateString('tr-TR', {
+    return `${date.toLocaleDateString('en-US', {
       weekday: 'long'
-    })}, ${date.toLocaleTimeString('tr-TR', {
+    })}, ${date.toLocaleTimeString('en-US', {
       hour: '2-digit', 
       minute: '2-digit'
     })}`;
   }
   
   // Otherwise show full date with time
-  return `${date.toLocaleDateString('tr-TR', {
+  return `${date.toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  })}, ${date.toLocaleTimeString('tr-TR', {
+  })}, ${date.toLocaleTimeString('en-US', {
     hour: '2-digit', 
     minute: '2-digit'
   })}`;
@@ -147,7 +147,7 @@ export default function NotificationsScreen() {
   // API'den bildirimleri alma
   const fetchNotifications = useCallback(async () => {
     if (!token) {
-      setError('Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.');
+      setError('Session information not found. Please log in again.');
       setLoading(false);
       return;
     }
@@ -169,7 +169,7 @@ export default function NotificationsScreen() {
         
         return {
           id: notification.id,
-          title: notification.title || 'Bildirim',
+          title: notification.title || 'Notification',
           message: notification.message,
           description: notification.message, // UI uyumluluğu için
           createdAt: notification.createdAt,
@@ -190,8 +190,8 @@ export default function NotificationsScreen() {
       setNotifications(sortedNotifications);
       console.log(`Loaded ${sortedNotifications.length} notifications, with ${sortedNotifications.filter((n: Notification) => !n.isRead).length} unread`);
     } catch (err) {
-      console.error('Bildirimler alınırken hata oluştu:', err);
-      setError('Bildirimler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+      console.error('Error loading notifications:', err);
+      setError('An error occurred while loading notifications. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -201,7 +201,7 @@ export default function NotificationsScreen() {
   // Bildirimi okundu olarak işaretleme ve ilgili issue sayfasına yönlendirme
   const handleNotificationPress = async (notification: Notification) => {
     if (!token || !user?.id) {
-      Alert.alert('Hata', 'Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.');
+      Alert.alert('Error', 'Session information not found. Please log in again.');
       return;
     }
 
@@ -236,34 +236,34 @@ export default function NotificationsScreen() {
           console.log(`Navigating to issue details for ID: ${issueId}`);
           router.push(`/issue-detail?id=${issueId}`);
         } else {
-          console.log('Bildirimde ilgili issue ID bulunamadı:', notification);
+          console.log('Issue ID not found in notification:', notification);
         }
       } else {
-        console.log('Bildirimde navigasyon için data bulunamadı:', notification);
+        console.log('No data found in notification for navigation:', notification);
       }
     } catch (err) {
-      console.error('Bildirim işleme hatası:', err);
-      Alert.alert('Hata', 'Bildirim işlenirken bir hata oluştu.');
+      console.error('Notification processing error:', err);
+      Alert.alert('Error', 'An error occurred while processing the notification.');
     }
   };
 
   // Bildirimi silme
   const handleDeleteNotification = async (notification: Notification) => {
     if (!token || !user?.id) {
-      Alert.alert('Hata', 'Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.');
+      Alert.alert('Error', 'Session information not found. Please log in again.');
       return;
     }
 
     Alert.alert(
-      'Bildirimi Sil',
-      'Bu bildirimi silmek istediğinize emin misiniz?',
+      'Delete Notification',
+      'Are you sure you want to delete this notification?',
       [
         {
-          text: 'İptal',
+          text: 'Cancel',
           style: 'cancel'
         },
         {
-          text: 'Sil',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -279,13 +279,13 @@ export default function NotificationsScreen() {
                 fetchNotifications();
                 
                 // Kullanıcıya bildir
-                Alert.alert('Başarılı', 'Bildirim başarıyla silindi.');
+                Alert.alert('Success', 'Notification successfully deleted.');
               } else {
-                Alert.alert('Hata', 'Bildirim silinirken bir sorun oluştu.');
+                Alert.alert('Error', 'There was a problem deleting the notification.');
               }
             } catch (err) {
-              console.error('Bildirim silinirken hata:', err);
-              Alert.alert('Hata', 'Bildirim silinirken bir hata oluştu.');
+              console.error('Error deleting notification:', err);
+              Alert.alert('Error', 'An error occurred while deleting the notification.');
             }
           }
         }
@@ -310,14 +310,14 @@ export default function NotificationsScreen() {
   const sendTestNotification = async () => {
     try {
       await sendLocalNotification(
-        'Test Bildirimi',
-        'Bu bir test bildirimidir. Bildirim sistemi çalışıyor!',
+        'Test Notification',
+        'This is a test notification. The notification system is working!',
         { notificationId: 'test-notification' }
       );
-      Alert.alert('Başarılı', 'Test bildirimi gönderildi! Bildirim çekmecesini kontrol edin.');
+      Alert.alert('Success', 'Test notification sent! Check the notification drawer.');
     } catch (error) {
-      console.error('Test bildirimi gönderilirken hata:', error);
-      Alert.alert('Hata', 'Test bildirimi gönderilirken bir hata oluştu.');
+      console.error('Error sending test notification:', error);
+      Alert.alert('Error', 'An error occurred while sending the test notification.');
     }
   };
 
@@ -326,7 +326,7 @@ export default function NotificationsScreen() {
       return (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#1e40af" />
-          <Text style={styles.loadingText}>Bildirimler yükleniyor...</Text>
+          <Text style={styles.loadingText}>Loading notifications...</Text>
         </View>
       );
     }
@@ -337,7 +337,7 @@ export default function NotificationsScreen() {
           <Ionicons name="alert-circle" size={40} color="#ef4444" />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => fetchNotifications()}>
-            <Text style={styles.retryButtonText}>Tekrar Dene</Text>
+            <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       );
@@ -348,7 +348,7 @@ export default function NotificationsScreen() {
         <View style={styles.emptyContainer}>
           <Ionicons name="notifications-off" size={40} color="#9ca3af" />
           <Text style={styles.emptyText}>
-            Henüz bildiriminiz bulunmuyor.
+            You don't have any notifications yet.
           </Text>
         </View>
       );
@@ -362,7 +362,7 @@ export default function NotificationsScreen() {
               style={styles.deleteAction}
               onPress={() => handleDeleteNotification(notification)}
             >
-              <Text style={styles.deleteActionText}>Sil</Text>
+              <Text style={styles.deleteActionText}>Delete</Text>
             </TouchableOpacity>
           );
           
@@ -429,7 +429,7 @@ export default function NotificationsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
-          Bildirimler
+          Notifications
         </Text>
         
         {/* Test bildirim butonu */}
@@ -438,7 +438,7 @@ export default function NotificationsScreen() {
           onPress={sendTestNotification}
         >
           <Ionicons name="notifications" size={18} color="white" />
-          <Text style={styles.testButtonText}>Test Bildirim</Text>
+          <Text style={styles.testButtonText}>Test Notification</Text>
         </TouchableOpacity>
       </View>
       

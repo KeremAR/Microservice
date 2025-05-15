@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { useAuth } from '../../contexts/AuthContext';
+import { startNotificationPolling, stopNotificationPolling } from '../../services/backgroundNotificationService';
 
 // Tab bar tiplerini tanımlayalım
 interface Route {
@@ -213,6 +216,21 @@ const styles = StyleSheet.create({
 });
 
 export default function AppLayout() {
+  const { token } = useAuth();
+  
+  // Uygulama başlatıldığında bildirim servisini başlat
+  useEffect(() => {
+    if (token) {
+      // 30 saniyede bir kontrol et
+      startNotificationPolling(token, 30000);
+    }
+    
+    // Component unmount olduğunda servisi durdur
+    return () => {
+      stopNotificationPolling();
+    };
+  }, [token]);
+  
   return (
     <Tabs
       screenOptions={{

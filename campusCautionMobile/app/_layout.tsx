@@ -3,13 +3,20 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import 'react-native-reanimated';
 
 import firebase from '@react-native-firebase/app';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { 
+  registerForPushNotificationsAsync, 
+  addNotificationListener,
+  addNotificationResponseListener
+} from '@/services/notificationService';
+import * as Notifications from 'expo-notifications';
+import { NotificationBackground } from '@/components/NotificationBackground';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();

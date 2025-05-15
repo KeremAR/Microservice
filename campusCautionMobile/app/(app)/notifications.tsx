@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { getNotifications, markNotificationAsRead, deleteNotification } from '../../services/api';
 import { useFocusEffect } from '@react-navigation/native';
+import { sendLocalNotification } from '../../services/notificationService';
 
 // Define notification types
 type NotificationType = 'status-update' | 'announcement' | 'alert' | 'ISSUE_CREATED' | 'ISSUE_STATUS_CHANGED' | string;
@@ -232,17 +233,27 @@ export default function NotificationsScreen() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // İlk yükleme
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
-
-  // Sayfaya her dönüşte yenileme
+  // İlk yükleme ve sayfa odaklandığında
   useFocusEffect(
     useCallback(() => {
       fetchNotifications();
     }, [fetchNotifications])
   );
+
+  // Test bildirim gönderme
+  const sendTestNotification = async () => {
+    try {
+      await sendLocalNotification(
+        'Test Bildirimi',
+        'Bu bir test bildirimidir. Bildirim sistemi çalışıyor!',
+        { notificationId: 'test-notification' }
+      );
+      Alert.alert('Başarılı', 'Test bildirimi gönderildi! Bildirim çekmecesini kontrol edin.');
+    } catch (error) {
+      console.error('Test bildirimi gönderilirken hata:', error);
+      Alert.alert('Hata', 'Test bildirimi gönderilirken bir hata oluştu.');
+    }
+  };
 
   const renderContent = () => {
     if (loading) {
@@ -347,6 +358,15 @@ export default function NotificationsScreen() {
         <Text style={styles.headerTitle}>
           Bildirimler
         </Text>
+        
+        {/* Test bildirim butonu */}
+        <TouchableOpacity 
+          style={styles.testButton}
+          onPress={sendTestNotification}
+        >
+          <Ionicons name="notifications" size={18} color="white" />
+          <Text style={styles.testButtonText}>Test Bildirim</Text>
+        </TouchableOpacity>
       </View>
       
       <ScrollView 
@@ -376,6 +396,9 @@ const styles = StyleSheet.create({
     paddingTop: 48,
     paddingBottom: 16,
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     color: 'white',
@@ -478,5 +501,18 @@ const styles = StyleSheet.create({
     right: 16,
     bottom: 16,
     padding: 8,
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  testButtonText: {
+    color: 'white',
+    fontSize: 12,
+    marginLeft: 4,
   },
 }); 

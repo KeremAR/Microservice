@@ -1,40 +1,28 @@
-import { Controller, Get, Post, Body, Param, Put, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Delete } from '@nestjs/common';
 import { NotificationService } from './notification.service';
-import { Notification } from './entities/notification.entity';
 
 @Controller('notifications')
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
-  @Post()
-  async createNotification(
-    @Body() body: { userId: string; title: string; message: string }
-  ): Promise<Notification> {
-    return this.notificationService.createNotification(
-      body.userId,
-      body.title,
-      body.message
-    );
-  }
-
   @Get(':userId')
-  async getNotifications(@Param('userId') userId: string): Promise<Notification[]> {
-    return this.notificationService.getNotifications(userId);
+  async getNotificationsByUserId(@Param('userId') userId: string) {
+    return this.notificationService.getNotificationsByUserId(userId);
   }
 
-  @Put(':id/read')
-  async markAsRead(
-    @Param('id') id: string,
-    @Body() body: { userId: string }
-  ): Promise<Notification> {
-    return this.notificationService.markAsRead(id, body.userId);
+  @Post(':userId/read/:notificationId')
+  async markNotificationAsRead(
+    @Param('userId') userId: string,
+    @Param('notificationId') notificationId: string,
+  ) {
+    return this.notificationService.markNotificationAsRead(userId, notificationId);
   }
 
-  @Delete(':id')
+  @Delete(':userId/:notificationId')
   async deleteNotification(
-    @Param('id') id: string,
-    @Body() body: { userId: string }
-  ): Promise<void> {
-    return this.notificationService.deleteNotification(id, body.userId);
+    @Param('userId') userId: string,
+    @Param('notificationId') notificationId: string,
+  ) {
+    return this.notificationService.deleteNotification(userId, notificationId);
   }
 } 

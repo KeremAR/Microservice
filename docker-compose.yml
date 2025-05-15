@@ -116,16 +116,20 @@ services:
       - "5004"
     environment:
       - PORT=5004
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=notification_db
+      - DATABASE_HOST=aws-0-eu-central-1.pooler.supabase.com
+      - DATABASE_PORT=6543
+      - DATABASE_USERNAME=postgres.ahrhnlmeimlxttvujmpa
+      - DATABASE_PASSWORD=Qfnr9GtwhCrlVOK3
+      - DATABASE_NAME=postgres
+      - DATABASE_SSL=true
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - RABBITMQ_URI=amqp://user:password@rabbitmq:5672
     depends_on:
-      - postgres
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     networks:
       - microservice-network
+    restart: always
 
   postgres:
     image: postgres:14-alpine

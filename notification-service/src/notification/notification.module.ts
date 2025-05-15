@@ -6,6 +6,7 @@ import { NotificationConsumer } from './notification.consumer';
 import { Notification } from './entities/notification.entity';
 import { NotificationEventPublisher } from './domain/events/notification.event.publisher';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 
 @Module({
   imports: [
@@ -23,10 +24,20 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
         },
       },
     ]),
+    RabbitMQModule.forRoot(RabbitMQModule, {
+      exchanges: [
+        {
+          name: 'amq.direct',
+          type: 'direct',
+        },
+      ],
+      uri: process.env.RABBITMQ_URI || 'amqp://user:password@rabbitmq:5672',
+    }),
   ],
-  controllers: [NotificationController, NotificationConsumer],
+  controllers: [NotificationController],
   providers: [
     NotificationService,
+    NotificationConsumer,
     NotificationEventPublisher,
   ],
   exports: [NotificationService],

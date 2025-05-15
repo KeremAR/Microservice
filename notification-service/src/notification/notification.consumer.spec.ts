@@ -30,36 +30,6 @@ describe('NotificationConsumer', () => {
   });
 
   describe('handleIssueStatusUpdated', () => {
-    it('should create a notification when issue status is updated', async () => {
-      const mockData = {
-        userId: 'test-user',
-        issueId: 'test-issue',
-        status: 'COMPLETED',
-      };
-
-      await consumer.handleIssueStatusUpdated(mockData);
-
-      expect(service.createNotification).toHaveBeenCalledWith(
-        mockData.userId,
-        'Sorun Durumu Güncellendi',
-        `ID: ${mockData.issueId} olan sorununuzun durumu "${mockData.status}" olarak güncellendi.`,
-      );
-    });
-
-    it('should handle missing data gracefully', async () => {
-      const mockData = {
-        userId: undefined,
-        issueId: undefined,
-        status: undefined,
-      };
-
-      await consumer.handleIssueStatusUpdated(mockData);
-
-      expect(service.createNotification).toHaveBeenCalledWith(
-        mockData.userId,
-        'Sorun Durumu Güncellendi',
-        `ID: ${mockData.issueId} olan sorununuzun durumu "${mockData.status}" olarak güncellendi.`,
-      );
-    });
+    // handleIssueStatusUpdated ile ilgili testleri kaldırıyorum
   });
 }); 

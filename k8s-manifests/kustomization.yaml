@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - api-gateway-deployment.yaml
+  - user-service-deployment.yaml
+  - issue-service-deployment.yaml
+  - department-service-deployment.yaml
+  - notification-service-deployment.yaml
+  - redis-deployment.yaml
+  - rabbitmq-deployment.yaml
+  - postgres-deployment.yaml
+  - ingress.yaml
+
+# Docker image isimlerini otomatik olarak değiştirebilirsiniz
+# Bu örnekte ${DOCKER_REGISTRY} değerini "your-registry" ile değiştiriyoruz
+images:
+- name: ${DOCKER_REGISTRY}/api-gateway
+  newName: campus-caution/api-gateway
+  newTag: latest
+- name: ${DOCKER_REGISTRY}/user-service
+  newName: campus-caution/user-service
+  newTag: latest
+- name: ${DOCKER_REGISTRY}/issue-service
+  newName: campus-caution/issue-service
+  newTag: latest
+- name: ${DOCKER_REGISTRY}/department-service
+  newName: campus-caution/department-service
+  newTag: latest
+- name: ${DOCKER_REGISTRY}/notification-service
+  newName: campus-caution/notification-service
+  newTag: latest
+
+# Minikube için imagePullPolicy'yi Never olarak ayarla
+patches:
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/imagePullPolicy
+      value: Never
+  target:
+    kind: Deployment 

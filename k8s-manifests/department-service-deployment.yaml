@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: department-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: department-service
+  template:
+    metadata:
+      labels:
+        app: department-service
+    spec:
+      containers:
+      - name: department-service
+        image: ${DOCKER_REGISTRY}/department-service:latest
+        ports:
+        - containerPort: 8083
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require"
+        - name: SPRING_RABBITMQ_HOST
+          value: "rabbitmq"
+        - name: SPRING_RABBITMQ_PORT
+          value: "5672"
+        - name: SPRING_RABBITMQ_USERNAME
+          value: "user"
+        - name: SPRING_RABBITMQ_PASSWORD
+          value: "password"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: department-service
+spec:
+  selector:
+    app: department-service
+  ports:
+  - port: 8083
+    targetPort: 8083
+  type: ClusterIP 

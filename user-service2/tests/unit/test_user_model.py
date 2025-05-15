@@ -1,6 +1,12 @@
 import pytest
-from models.user_model import SignUpSchema, LoginSchema, UserSchema, ResetPasswordRequest
+from models.user_model import (
+    SignUpSchema,
+    LoginSchema,
+    UserSchema,
+    ResetPasswordRequest,
+)
 from pydantic import ValidationError
+
 
 class TestSignUpSchema:
     def test_valid_signup(self):
@@ -9,7 +15,7 @@ class TestSignUpSchema:
             "email": "test@example.org",
             "password": "Password123",
             "name": "Test",
-            "surname": "User"
+            "surname": "User",
         }
         user = SignUpSchema(**user_data)
         assert user.email == "test@example.org"
@@ -24,7 +30,7 @@ class TestSignUpSchema:
             "email": "test@example.com",  # This domain is blocked in the validator
             "password": "Password123",
             "name": "Test",
-            "surname": "User"
+            "surname": "User",
         }
         with pytest.raises(ValidationError):
             SignUpSchema(**user_data)
@@ -36,7 +42,7 @@ class TestSignUpSchema:
             "email": "test@example.org",
             "password": "password123",
             "name": "Test",
-            "surname": "User"
+            "surname": "User",
         }
         with pytest.raises(ValidationError):
             SignUpSchema(**user_data)
@@ -58,10 +64,11 @@ class TestSignUpSchema:
             "password": "Password123",
             "name": "Test",
             "surname": "User",
-            "phone_number": "invalid"  # Not a valid phone number
+            "phone_number": "invalid",  # Not a valid phone number
         }
         with pytest.raises(ValidationError):
             SignUpSchema(**user_data)
+
 
 class TestResetPasswordRequest:
     def test_password_mismatch(self):
@@ -69,7 +76,7 @@ class TestResetPasswordRequest:
         data = {
             "email": "test@example.org",
             "new_password": "Password123",
-            "confirm_password": "Password456"  # Different
+            "confirm_password": "Password456",  # Different
         }
         with pytest.raises(ValidationError):
             ResetPasswordRequest(**data)
@@ -79,9 +86,9 @@ class TestResetPasswordRequest:
         data = {
             "email": "test@example.org",
             "new_password": "Password123",
-            "confirm_password": "Password123"
+            "confirm_password": "Password123",
         }
         request = ResetPasswordRequest(**data)
         assert request.email == "test@example.org"
         assert request.new_password == "Password123"
-        assert request.confirm_password == "Password123" 
+        assert request.confirm_password == "Password123"

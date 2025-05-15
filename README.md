@@ -6,7 +6,7 @@ This section outlines the step-by-step interaction of microservices during the c
 
 1.  **User Login (Mobile Frontend & User Service):**
     *   The user logs into the **Mobile Frontend** application using either their Microsoft account (Entra ID) or email/password.
-    *   Authentication processes (login/signup and token management) are handled by the **User Service** (Java/Spring Boot).
+    *   Authentication processes (login/signup and token management) are handled by the **User Service** (Python/FastAPI).
 
 2.  **Issue Reporting (Mobile Frontend -> Issue Service):**
     *   The user reports a new issue (title, description, category, photo, etc.) through the mobile application interface (e.g., "Inform Us" button).
@@ -38,15 +38,18 @@ This section outlines the step-by-step interaction of microservices during the c
 
 ## 🎯 Project Goal and Scope
 
-### 1️⃣ User Service  - Spring Boot – Java (PostgreSQL)
+### 1️⃣ User Service - Python – FastAPI (PostgreSQL)
 - Kullanıcı kaydı, giriş (auth), roller (admin, öğrenci vb.)
 - Kullanıcı profili yönetimi
-- JWT veya OAuth2 tabanlı kimlik doğrulama + Role-Based Access Control (RBAC)
+- Firebase Authentication ile kimlik doğrulama + Role-Based Access Control (RBAC)
+- Redis ile önbellekleme (caching)
+- Prometheus ile metrik toplama
+- RabbitMQ ile event publishing
 - **Endpointler:**
-  - `POST /auth/register`
+  - `POST /auth/signup`
   - `POST /auth/login`
-  - `GET /users/{id}`
-  - `PUT /users/{id}`
+  - `GET /users/profile`
+  - `PUT /users/profile`
 
 ### 2️⃣ Issue Service - ASP.NET Core - C# (MongoDB - NoSQL)
 - Kullanıcılar kampüsteki problemleri raporlayacak
@@ -165,3 +168,76 @@ This project uses Prometheus for metrics collection and Grafana for visualizatio
 ### Grafana Dashboards
 
 *   **`monitoring/grafana/dashboards/campus-caution-dashboard.json`:** The main dashboard showing service health (`up` metric), gateway request rates/durations, user registration counts/rates, and issue creation counts/rates.
+
+## Kubernetes Deployment
+
+Bu proje, farklı mikroservislerin Kubernetes kullanılarak deploy edilmesini sağlayan yapılandırma dosyalarını içerir.
+
+### Gereksinimler
+
+- Docker
+- Kubernetes (minikube, kind, Docker Desktop, veya bir Kubernetes kümesi)
+- kubectl
+
+### Docker Image'larını Oluşturma ve Push Etme
+
+Docker image'larını oluşturmak ve bir registry'ye göndermek için:
+
+```bash
+# Script'i çalıştırılabilir hale getir
+chmod +x ./scripts/build-and-push.sh
+
+# Docker Hub veya başka bir registry'ye giriş yap
+docker login
+
+# Servisleri build et ve push et
+./scripts/build-and-push.sh
+```
+
+### Kubernetes'e Deploy Etme
+
+Mikroservisleri Kubernetes kümesine deploy etmek için:
+
+```bash
+# Script'i çalıştırılabilir hale getir
+chmod +x ./scripts/deploy-to-k8s.sh
+
+# Deploy işlemini başlat
+./scripts/deploy-to-k8s.sh
+```
+
+### Servis Ölçeklendirmesi
+
+User Service, varsayılan olarak 3 replica ile ölçeklendirilmiş olarak deploy edilir ve Horizontal Pod Autoscaler (HPA) ile otomatik olarak ölçeklendirilir.
+
+Otomatik ölçeklendirme durumunu kontrol etmek için:
+
+```bash
+kubectl get hpa user-service-hpa -n campus-caution
+```
+
+Replica sayısını manuel olarak değiştirmek için:
+
+```bash
+kubectl scale deployment/user-service --replicas=5 -n campus-caution
+```
+
+### Uygulamaya Erişim
+
+API Gateway servisi, aşağıdaki yöntemlerden biriyle erişilebilir:
+
+1. **Ingress (önerilen):** 
+   `/etc/hosts` dosyanıza `127.0.0.1 campus-caution.local` ekleyin ve 
+   http://campus-caution.local adresinden erişin
+
+2. **Port Forwarding:**
+   ```bash
+   kubectl port-forward svc/api-gateway 3000:3000 -n campus-caution
+   ```
+   Ardından http://localhost:3000 adresinden erişin
+
+3. **LoadBalancer:** (Eğer destelenen bir Kubernetes kümesindeyseniz)
+   ```bash
+   kubectl get service api-gateway -n campus-caution
+   ```
+   External-IP adresi üzerinden erişin

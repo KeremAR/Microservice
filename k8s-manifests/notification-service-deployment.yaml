@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+      - name: notification-service
+        image: ${DOCKER_REGISTRY}/notification-service:latest
+        ports:
+        - containerPort: 5004
+        env:
+        - name: PORT
+          value: "5004"
+        - name: DB_HOST
+          value: "postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USERNAME
+          value: "postgres"
+        - name: DB_PASSWORD
+          value: "postgres"
+        - name: DB_NAME
+          value: "notification_db"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+spec:
+  selector:
+    app: notification-service
+  ports:
+  - port: 5004
+    targetPort: 5004
+  type: ClusterIP 

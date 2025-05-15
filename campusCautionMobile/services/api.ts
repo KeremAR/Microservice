@@ -326,20 +326,132 @@ export const getUserIssues = async (token: string) => {
 // Bildirimleri getirme
 export const getNotifications = async (token: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS?.LIST || '/notifications'}`, {
+    console.log('-------- API: getNotifications çağrıldı --------');
+    
+    // Extract userId from token (JWT parsing)
+    let userId = '';
+    if (token && token.split('.').length === 3) {
+      try {
+        // Decode JWT token payload
+        const base64Payload = token.split('.')[1];
+        const payload = JSON.parse(atob(base64Payload));
+        console.log('Token payload for getNotifications:', JSON.stringify(payload));
+        
+        // Get userId from token claims
+        userId = payload.uid || payload.sub || payload.user_id || '';
+        console.log('Extracted userId from token:', userId);
+      } catch (e) {
+        console.error('Token parsing error:', e);
+      }
+    }
+
+    if (!userId) {
+      console.error('No userId found in token, cannot fetch notifications');
+      return [];
+    }
+    
+    // Gateway üzerinden yönlendirme için URL: http://gateway-url/notification/notifications/{userId}
+    const url = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.LIST}/${userId}`;
+    console.log('API URL for notifications:', url);
+    console.log('Token:', token ? `${token.substring(0, 15)}...` : 'Token yok');
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(token),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Bildirimler alınamadı');
+    console.log('API yanıtı alındı');
+    console.log('Status kodu:', response.status);
+    console.log('Status metni:', response.statusText);
+    
+    const responseText = await response.text();
+    console.log('Yanıt metni:', responseText);
+    
+    let data;
+    
+    try {
+      // Only try to parse if there's actual content and it's not empty
+      data = responseText ? JSON.parse(responseText) : [];
+      console.log('Yanıt JSON olarak başarıyla işlendi');
+    } catch (e) {
+      console.error('JSON parse hatası:', e);
+      console.error('Invalid response text:', responseText);
+      // Return empty array instead of throwing
+      return [];
     }
-
-    return await response.json();
+    
+    if (!response.ok) {
+      console.log('İsteğin yanıtı başarısız (HTTP ' + response.status + ')');
+      
+      // Daha detaylı hata mesajı oluştur
+      let errorMessage = 'Bildirimler alınamadı';
+      
+      if (data && data.message) {
+        errorMessage = data.message;
+      } else if (data && data.detail && data.detail.message) {
+        errorMessage = data.detail.message;
+      }
+      
+      console.error('Hata detayları:', data);
+      // Hata oluşsa bile boş array dön ki UI crash olmasın
+      return [];
+    }
+    
+    // If the response is not an array, wrap it in an array
+    if (data && !Array.isArray(data)) {
+      console.log('API yanıtı array değil, array içine alınıyor');
+      data = [data];
+    }
+    
+    console.log('API çağrısı başarılı, veri dönülüyor. Eleman sayısı:', Array.isArray(data) ? data.length : 'N/A');
+    return data || [];
+    
   } catch (error) {
     console.error('Notifications fetch error:', error);
-    throw error;
+    // Hata oluşsa bile boş array dön ki UI crash olmasın
+    return [];
+  }
+};
+
+// Bildirimi okundu olarak işaretleme
+export const markNotificationAsRead = async (token: string, userId: string, notificationId: string) => {
+  try {
+    console.log('-------- API: markNotificationAsRead çağrıldı --------');
+    console.log(`UserId: ${userId}, NotificationId: ${notificationId}`);
+    
+    // Gateway üzerinden yönlendirme için URL
+    const url = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.MARK_READ(notificationId, userId)}`;
+    console.log('API URL for marking notification as read:', url);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getAuthHeaders(token),
+      // Not: Notification servisinin beklediği şekilde boş body gönder
+      body: JSON.stringify({})
+    });
+    
+    console.log('API yanıtı alındı');
+    console.log('Status kodu:', response.status);
+    
+    const responseText = await response.text();
+    let data;
+    
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+    } catch (e) {
+      console.error('JSON parse hatası:', e);
+      return false;
+    }
+    
+    if (!response.ok) {
+      console.error('Bildirim okundu işaretlenemedi:', data);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Mark notification as read error:', error);
+    return false;
   }
 };
 
@@ -516,5 +628,35 @@ export const getIssueDetails = async (token: string, issueId: string) => {
   } catch (error) {
     console.error('Issue details fetch error:', error instanceof Error ? error.message : String(error));
     return null; // Return null instead of throwing to show error UI
+  }
+};
+
+// Bildirimi silme
+export const deleteNotification = async (token: string, userId: string, notificationId: string) => {
+  try {
+    console.log('-------- API: deleteNotification çağrıldı --------');
+    console.log(`UserId: ${userId}, NotificationId: ${notificationId}`);
+    
+    // Gateway üzerinden yönlendirme için URL
+    const url = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.DELETE(notificationId, userId)}`;
+    console.log('API URL for deleting notification:', url);
+    
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: getAuthHeaders(token),
+    });
+    
+    console.log('API yanıtı alındı');
+    console.log('Status kodu:', response.status);
+    
+    if (!response.ok) {
+      console.error('Bildirim silinemedi. Durum kodu:', response.status);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    return false;
   }
 }; 

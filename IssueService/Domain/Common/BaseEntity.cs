@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using MediatR;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
@@ -7,12 +8,19 @@ namespace IssueService.Domain.Common;
 public abstract class BaseEntity
 {
     [BsonId]
-    public ObjectId Id { get; protected set; } = ObjectId.GenerateNewId();
+    [BsonRepresentation(BsonType.ObjectId)]
+    public ObjectId Id { get; protected set; }
 
     private readonly List<INotification> _events = new();
-    [BsonIgnore]
-    public IReadOnlyCollection<INotification> Events => _events;
+    public virtual IReadOnlyCollection<INotification> Events => _events.AsReadOnly();
 
-    protected void AddEvent(INotification @event) => _events.Add(@event);
-    public void ClearEvents() => _events.Clear();
+    protected void AddEvent(INotification @event)
+    {
+        _events.Add(@event);
+    }
+
+    public virtual void ClearEvents()
+    {
+        _events.Clear();
+    }
 }

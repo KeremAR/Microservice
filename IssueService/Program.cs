@@ -66,19 +66,36 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 // Repositories
 builder.Services.AddScoped<IIssueRepository, IssueRepository>();
 
-// Services
-builder.Services.AddScoped<IIssueService, IssueServiceImpl>();
-
-// RabbitMQ Producer
-builder.Services.AddSingleton<IRabbitMQProducer, RabbitMQProducer>();
-
-// Prometheus Metrics
-// Define and register the counter for created issues
+// Prometheus Metrics - Define counters before they are used in IssueServiceImpl
 var issuesCreatedCounter = Metrics.CreateCounter(
     "issues_created_total", 
     "Total number of issues created."
 );
-builder.Services.AddSingleton(issuesCreatedCounter); // Register the counter instance
+var issuesDeletedCounter = Metrics.CreateCounter(
+    "issues_deleted_total",
+    "Total number of issues deleted."
+);
+var issuesUpdatedCounter = Metrics.CreateCounter(
+    "issues_updated_total",
+    "Total number of issues updated."
+);
+// Register the counter instances with DI (as singleton)
+builder.Services.AddSingleton(issuesCreatedCounter); 
+builder.Services.AddSingleton(issuesDeletedCounter);
+builder.Services.AddSingleton(issuesUpdatedCounter);
+
+// Services
+builder.Services.AddScoped<IIssueService>(sp => new IssueServiceImpl(
+    sp.GetRequiredService<IIssueRepository>(),
+    sp.GetRequiredService<IMediator>(),
+    issuesCreatedCounter, // Now using the defined counter instance
+    issuesDeletedCounter, // Now using the defined counter instance
+    issuesUpdatedCounter, // Now using the defined counter instance
+    sp.GetRequiredService<IConnectionMultiplexer>()
+));
+
+// RabbitMQ Producer
+builder.Services.AddSingleton<IRabbitMQProducer, RabbitMQProducer>();
 
 // CORS policy ekle
 builder.Services.AddCors(options =>
@@ -116,16 +133,19 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = string.Empty; // Set Swagger UI at the root
 });
 
-// Enable Prometheus metrics
-app.UseMetricServer();
-app.UseHttpMetrics();
+app.UseRouting();
 
-// Explicitly map the metrics endpoint if UseMetricServer doesn't suffice
-app.MapMetrics();
+// Enable Prometheus metrics
+app.UseHttpMetrics();
+app.UseMetricServer("/metrics");
 
 //app.UseHttpsRedirection();
 app.UseCors("AllowAll");
+
+// Authentication and Authorization should typically be between UseRouting and UseEndpoints/MapControllers
+// app.UseAuthentication(); // Uncomment if you have authentication
 app.UseAuthorization();
+
 app.MapControllers();
 
 // Ping MongoDB Atlas on startup for connectivity check

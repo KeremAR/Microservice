@@ -18,6 +18,7 @@ import jwt
 from typing import Optional, Dict, Any
 from supabase import create_client, Client
 from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
+from prometheus_fastapi_instrumentator import Instrumentator
 import time
 import redis
 from functools import wraps
@@ -26,6 +27,9 @@ from datetime import datetime
 load_dotenv()
 
 app = FastAPI(title="User Service")
+
+# Instrument FastAPI app with default metrics
+Instrumentator().instrument(app).expose(app)
 
 # Initialize Redis client
 redis_host = os.getenv("REDIS_HOST", "redis")  # Default to 'redis' for Docker Compose
@@ -158,6 +162,18 @@ AUTH_FAILURE = Counter(
 DB_CONNECTIONS = Gauge("user_service_db_connections", "Number of DB connections")
 USERS_REGISTERED_TOTAL = Counter(
     "users_registered_total", "Total number of users registered"
+)
+USERS_CREATED_TOTAL = Counter(
+    "users_created_total", "Toplam oluşturulan kullanıcı sayısı"
+)
+USERS_DELETED_TOTAL = Counter(
+    "users_deleted_total", "Toplam silinen kullanıcı sayısı"
+)
+USERS_UPDATED_TOTAL = Counter(
+    "users_updated_total", "Toplam güncellenen kullanıcı sayısı"
+)
+USERS_LOGIN_TOTAL = Counter(
+    "users_login_total", "Toplam kullanıcı giriş sayısı"
 )
 
 
@@ -607,6 +623,7 @@ async def signup(user_data: SignUpSchema):
             print(f"User successfully saved to Supabase: {email}")
             supabase_saved = True
             USERS_REGISTERED_TOTAL.inc()
+            USERS_CREATED_TOTAL.inc()
         else:
             print(
                 f"WARNING: Failed to save user to Supabase, continuing with Firebase only: {email}"
@@ -737,6 +754,8 @@ async def login(user_data: LoginSchema):
         # Invalidate any cached user data for this specific user
         invalidate_cache(pattern=f"get_profile:*{firebase_user.uid}*")
 
+        USERS_LOGIN_TOTAL.inc()
+
         return JSONResponse(
             content={
                 "status": "success",
@@ -853,6 +872,7 @@ async def google_signup(request: dict):
             print(f"Google user successfully saved to Supabase with UUID: {new_uuid}")
             supabase_saved = True
             USERS_REGISTERED_TOTAL.inc()
+            USERS_CREATED_TOTAL.inc()
         else:
             print(f"WARNING: Failed to save Google user to Supabase: {email}")
 
@@ -1210,6 +1230,7 @@ async def update_profile(user_data: UpdateUserRequest, authorization: str = Head
                     invalidate_cache(pattern=f"get_profile:*{current_user['id']}*")
                     
                     # Güncellenmiş kullanıcı bilgilerini döndür
+                    USERS_UPDATED_TOTAL.inc()
                     return JSONResponse(
                         content={
                             "status": "success",
@@ -1362,6 +1383,7 @@ async def delete_profile(authorization: str = Header(None)):
         
         # 4. Silme işlemi sonucunu döndür
         if firebase_deleted or supabase_deleted:
+            USERS_DELETED_TOTAL.inc()
             return JSONResponse(
                 content={
                     "status": "success",

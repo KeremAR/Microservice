@@ -1,0 +1,377 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "type": "text",
+      "title": "Servis Durumları ve Sistem Metrikleri",
+      "options": {
+        "content": "### Mikroservislerin genel sağlık durumları (UP/DOWN), sistem kaynak kullanımları ve uygulama metrikleri.",
+        "mode": "markdown"
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 2 },
+      "type": "stat",
+      "title": "Gateway Durumu",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "up{job=\"gateway\"}", "legendFormat": "{{job}}", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [{ "value": 0, "color": "red" }, { "value": 1, "color": "green" }] } } }
+    },
+    {
+      "id": 3,
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 2 },
+      "type": "stat",
+      "title": "Issue Svc Durumu",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "up{job=\"issue-service\"}", "legendFormat": "{{job}}", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [{ "value": 0, "color": "red" }, { "value": 1, "color": "green" }] } } }
+    },
+    {
+      "id": 4,
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 2 },
+      "type": "stat",
+      "title": "Notification Svc Durumu",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "up{job=\"notification-service\"}", "legendFormat": "{{job}}", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [{ "value": 0, "color": "red" }, { "value": 1, "color": "green" }] } } }
+    },
+    {
+      "id": 5,
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 2 },
+      "type": "stat",
+      "title": "User Svc Durumu",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "up{job=\"user-service\"}", "legendFormat": "{{job}}", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [{ "value": 0, "color": "red" }, { "value": 1, "color": "green" }] } } }
+    },
+    {
+      "id": 6,
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 2 },
+      "type": "stat",
+      "title": "Prometheus Durumu",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "up{job=\"prometheus\"}", "legendFormat": "{{job}}", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [{ "value": 0, "color": "red" }, { "value": 1, "color": "green" }] } } }
+    },
+    {
+      "id": 7,
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 2 },
+      "type": "stat",
+      "title": "Node Exporter Durumu",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "up{job=\"node-exporter\"}", "legendFormat": "{{job}}", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [{ "value": 0, "color": "red" }, { "value": 1, "color": "green" }] } } }
+    },
+    {
+      "id": 8,
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 6 },
+      "type": "timeseries",
+      "title": "Node CPU Kullanımı (Node Exporter)",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\"}[1m])) * 100)", "legendFormat": "{{instance}} - CPU Usage", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "percent", "custom":{"axisPlacement":"right","lineWidth":2,"fillOpacity":10} } }
+    },
+    {
+      "id": 9,
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 6 },
+      "type": "timeseries",
+      "title": "Node Bellek Kullanımı (Node Exporter)",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "(node_memory_MemTotal_bytes{job=\"node-exporter\"} - node_memory_MemAvailable_bytes{job=\"node-exporter\"}) / node_memory_MemTotal_bytes{job=\"node-exporter\"} * 100", "legendFormat": "{{instance}} - Memory Usage", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "percent", "custom":{"axisPlacement":"right","lineWidth":2,"fillOpacity":10} } }
+    },
+    {
+      "id": 10,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 13 },
+      "type": "text",
+      "title": "Gateway Service Metrikleri",
+      "options": { "content": "#### Gateway Servisi Uygulama Metrikleri", "mode": "markdown" }
+    },
+    {
+      "id": 13,
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 15 },
+      "type": "timeseries",
+      "title": "Gateway: CPU Kullanımı",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "rate(process_cpu_seconds_total{job=\"gateway\"}[1m]) * 100", "legendFormat": "cpu %", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "percent", "custom":{"lineWidth":2,"fillOpacity":15} } }
+    },
+    {
+      "id": 14,
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 15 },
+      "type": "timeseries",
+      "title": "Gateway: Bellek Kullanımı",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "process_resident_memory_bytes{job=\"gateway\"}", "legendFormat": "memory", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes", "custom":{"lineWidth":2,"fillOpacity":15} } }
+    },
+    {
+      "id": 15,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 22 },
+      "type": "text",
+      "title": "Issue Service Metrikleri",
+      "options": { "content": "#### Issue Servisi Uygulama ve İş Metrikleri", "mode": "markdown" }
+    },
+    {
+      "id": 30,
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 24 },
+      "type": "stat",
+      "title": "Total Issues Created",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "issues_created_total{job=\"issue-service\"}", "legendFormat": "Created", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 31,
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 24 },
+      "type": "stat",
+      "title": "Total Issues Updated",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "issues_updated_total{job=\"issue-service\"}", "legendFormat": "Updated", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 32,
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 24 },
+      "type": "stat",
+      "title": "Total Issues Deleted",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "issues_deleted_total{job=\"issue-service\"}", "legendFormat": "Deleted", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 18,
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 28 },
+      "type": "timeseries",
+      "title": "Issue Svc: CPU Kullanımı",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "rate(process_cpu_seconds_total{job=\"issue-service\"}[1m]) * 100", "legendFormat": "cpu %", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "percent", "custom":{"lineWidth":2,"fillOpacity":15} } }
+    },
+    {
+      "id": 19,
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 28 },
+      "type": "timeseries",
+      "title": "Issue Svc: Bellek Kullanımı",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "process_resident_memory_bytes{job=\"issue-service\"}", "legendFormat": "memory", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes", "custom":{"lineWidth":2,"fillOpacity":15} } }
+    },
+    {
+      "id": 20,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 35 },
+      "type": "text",
+      "title": "Notification Service Metrikleri",
+      "options": { "content": "#### Notification Servisi Uygulama ve İş Metrikleri", "mode": "markdown" }
+    },
+    {
+      "id": 33,
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 37 },
+      "type": "stat",
+      "title": "Notifications Sent",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "notification_sent_total{job=\"notification-service\"}", "legendFormat": "Sent", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 34,
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 37 },
+      "type": "stat",
+      "title": "Notifications Failed",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "notification_failed_total{job=\"notification-service\"}", "legendFormat": "Failed", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 35,
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 37 },
+      "type": "stat",
+      "title": "Notifications Read",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "notification_read_total{job=\"notification-service\"}", "legendFormat": "Read", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 36,
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 37 },
+      "type": "stat",
+      "title": "Notifications Deleted",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "notification_deleted_total{job=\"notification-service\"}", "legendFormat": "Deleted", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "orange", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 23,
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 41 },
+      "type": "timeseries",
+      "title": "Notify Svc: CPU Kullanımı",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "rate(process_cpu_seconds_total{job=\"notification-service\"}[1m]) * 100", "legendFormat": "cpu %", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "percent", "custom":{"lineWidth":2,"fillOpacity":15} } }
+    },
+    {
+      "id": 24,
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 41 },
+      "type": "timeseries",
+      "title": "Notify Svc: Bellek Kullanımı",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "process_resident_memory_bytes{job=\"notification-service\"}", "legendFormat": "memory", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes", "custom":{"lineWidth":2,"fillOpacity":15} } }
+    },
+    {
+      "id": 25,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 48 },
+      "type": "text",
+      "title": "User Service Metrikleri",
+      "options": { "content": "#### User Servisi Uygulama ve İş Metrikleri", "mode": "markdown" }
+    },
+    {
+      "id": 37,
+      "gridPos": { "h": 4, "w": 5, "x": 0, "y": 50 },
+      "type": "stat",
+      "title": "Users Registered",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "users_registered_total{job=\"user-service\"}", "legendFormat": "Registered", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 38,
+      "gridPos": { "h": 4, "w": 5, "x": 5, "y": 50 },
+      "type": "stat",
+      "title": "Users Created (DB)",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "users_created_total{job=\"user-service\"}", "legendFormat": "Created (DB)", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 39,
+      "gridPos": { "h": 4, "w": 4, "x": 10, "y": 50 },
+      "type": "stat",
+      "title": "User Logins",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "users_login_total{job=\"user-service\"}", "legendFormat": "Logins", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "purple", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 40,
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 50 },
+      "type": "stat",
+      "title": "Users Updated",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "users_updated_total{job=\"user-service\"}", "legendFormat": "Updated", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "yellow", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 41,
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 50 },
+      "type": "stat",
+      "title": "Users Deleted",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "users_deleted_total{job=\"user-service\"}", "legendFormat": "Deleted", "refId": "A" } ],
+      "options": { "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }, "orientation": "auto", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "align": "auto", "displayMode": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [ { "color": "orange", "value": null } ] } }, "overrides": [] },
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 28,
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 54 },
+      "type": "timeseries",
+      "title": "User Svc: CPU Kullanımı",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "rate(process_cpu_seconds_total{job=\"user-service\"}[1m]) * 100", "legendFormat": "cpu %", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "percent", "custom":{"lineWidth":2,"fillOpacity":15} } }
+    },
+    {
+      "id": 29,
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 54 },
+      "type": "timeseries",
+      "title": "User Svc: Bellek Kullanımı",
+      "datasource": "Prometheus",
+      "targets": [ { "expr": "process_resident_memory_bytes{job=\"user-service\"}", "legendFormat": "memory", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes", "custom":{"lineWidth":2,"fillOpacity":15} } }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "tags": ["microservice", "prometheus", "detailed"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Detaylı Mikroservis İzleme",
+  "uid": "micro-detailed-dash-v2",
+  "version": 5,
+  "weekStart": ""
+} 

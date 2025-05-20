@@ -3,10 +3,17 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationModule } from './notification/notification.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { PrometheusModule, PrometheusController } from '@willsoto/nestjs-prometheus';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    PrometheusModule.register({
+      path: '/metrics',
+      defaultMetrics: {
+        enabled: true,
+      },
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DATABASE_HOST,
@@ -35,7 +42,8 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     ]),
     NotificationModule,
   ],
-  controllers: [],
-  providers: [],
+  controllers: [PrometheusController],
+  providers: [
+  ],
 })
 export class AppModule {} 

@@ -2,7 +2,7 @@
 
 ## 🚀 Event Flow - Core Scenario: Reporting an Issue
 
-This section outlines the step-by-step interaction of microservices during the core user scenario of "Reporting an Issue." This flow helps in understanding the current and planned structure of the project.
+This section outlines the step-by-step interaction of microservices during the core user scenario of "Reporting an Issue." This flow helps in understanding the structure of the project.
 
 1.  **User Login (Mobile Frontend & User Service):**
     *   The user logs into the **Mobile Frontend** application using either their Microsoft account (Entra ID) or email/password.
@@ -10,7 +10,7 @@ This section outlines the step-by-step interaction of microservices during the c
 
 2.  **Issue Reporting (Mobile Frontend -> Issue Service):**
     *   The user reports a new issue (title, description, category, photo, etc.) through the mobile application interface (e.g., "Inform Us" button).
-    *   **Mobile Frontend** sends an HTTP POST request with this information to the `/issues/report` endpoint of the **Issue Service** (ASP.NET Core/C#). *(Note: This request might be routed through the Gateway in the future)*.
+    *   **Mobile Frontend** sends an HTTP POST request with this information to the `/issues/report` endpoint of the **Issue Service** (ASP.NET Core/C#). This request is routed through the API Gateway.
 
 3.  **Issue Processing and Saving (Issue Service):**
     *   **Issue Service** receives the request, validates it, and creates a new `Issue` object.
@@ -21,16 +21,16 @@ This section outlines the step-by-step interaction of microservices during the c
     *   A handler listening to the `IssueCreatedEvent` (`IssueCreatedHandler`) formats a message containing the event details (Issue ID, User ID, Category, etc.).
     *   It publishes this message to the central messaging system, **RabbitMQ** (to the `issue_created` queue/exchange).
 
-5.  **Department Notification (RabbitMQ -> Department Service - *Planned*):**
-    *   The **Department Service** (Java/Spring Boot - *Planned for development*) is intended to listen for the `IssueCreatedEvent` from RabbitMQ.
-    *   Upon receiving this event, the **Department Service** might process the relevant issue into its database, assign it to the appropriate department, or generate statistical data.
+5.  **Department Notification (RabbitMQ -> Department Service):**
+    *   The **Department Service** (Java/Spring Boot) listens for the `IssueCreatedEvent` from RabbitMQ.
+    *   Upon receiving this event, the **Department Service** processes the relevant issue into its database, assigns it to the appropriate department, and generates statistical data.
 
-6.  **User Notification (Issue Service -> RabbitMQ -> Notification Service - *Planned*):**
-    *   In the future, when the status of an issue changes within the **Issue Service** (e.g., "Resolved," "In Progress"), new events like `IssueStatusChangedEvent` will be published to RabbitMQ.
-    *   The **Notification Service** (Node.js/NestJS - *Planned for development*) will listen for these status change events.
-    *   Upon receiving the event, the **Notification Service** will send a status update notification to the original user who reported the issue, using methods like email, push notification, or SMS.
+6.  **User Notification (Issue Service -> RabbitMQ -> Notification Service):**
+    *   When the status of an issue changes within the **Issue Service** (e.g., "Resolved," "In Progress"), events like `IssueStatusChangedEvent` are published to RabbitMQ.
+    *   The **Notification Service** (Node.js/NestJS) listens for these status change events.
+    *   Upon receiving the event, the **Notification Service** sends a status update notification to the original user who reported the issue, using methods like email or push notification.
 
-**Summary:** In the current implementation, users can log in via the **Mobile Frontend** (using **User Service**) and report issues to the **Issue Service**. The **Issue Service** then publishes this event via **RabbitMQ**. The processing of these events by the department and notification services is planned for subsequent development phases.
+**Summary:** In this implementation, users can log in via the **Mobile Frontend** (using **User Service**) and report issues to the **Issue Service**. The **Issue Service** then publishes events via **RabbitMQ**, which are consumed by both the **Department Service** for assignment and the **Notification Service** for user updates.
 
 ---
 
@@ -77,10 +77,13 @@ This section outlines the step-by-step interaction of microservices during the c
 
 ### 4️⃣ Notification Service  - Node.js – NestJS (PostgreSQL)
 - Kullanıcılara durum değişiklikleri hakkında bildirim gönderme
-- E-posta, SMS veya push notification desteği
+- E-posta ve push notification desteği
 - RabbitMQ ile **"Issue Status Updated"** event'ini dinleme ve bildirim gönderme
 - **Endpointler:**  
-  - `POST /notifications/send`
+  - `POST /notification`
+  - `GET /notification/:userId`
+  - `PUT /notification/:id/read`
+  - `DELETE /notification/:id`
   - **EVENT LISTENER:** Issue Status Updated (RabbitMQ)
 
 ### 5️⃣ Gateway Service  - Node.js – Express.js
@@ -139,16 +142,16 @@ Sorunlar harita üzerinde gösterilir, böylece yoğun şikayet alanları belirl
 
 ### 🔔 Notification Service & Gateway Entegrasyonu
 
-- **Notification Service** artık doğrudan dışarıya açılmak yerine, sadece Gateway üzerinden erişilebilecek şekilde yapılandırıldı.
+- **Notification Service** sadece Gateway üzerinden erişilebilecek şekilde yapılandırılmıştır.
 - Gateway üzerinden notification işlemleri için aşağıdaki endpointler kullanılabilir:
     - **POST** `/notification/notifications` : Bildirim oluşturma
     - **GET** `/notification/notifications/{userId}` : Kullanıcının bildirimlerini listeleme
     - **PUT** `/notification/notifications/{notificationId}/read` : Bildirimi okundu olarak işaretleme
     - **DELETE** `/notification/notifications/{notificationId}` : Bildirimi silme
 - Gateway, gelen istekleri notification servisine yönlendirir ve cevapları kullanıcıya iletir.
-- Notification servisi Docker ortamında environment değişkeninden portunu alacak şekilde güncellendi ve sadece 5004 portunda dinleyecek şekilde yapılandırıldı.
-- Dockerfile ve docker-compose ayarları bu yeni yapıya uygun olarak güncellendi.
-- Tüm testler başarıyla geçti ve sistem gateway üzerinden sorunsuz çalışmaktadır.
+- Notification servisi Docker ortamında environment değişkeninden portunu alacak şekilde yapılandırıldı ve sadece 5004 portunda dinleyecek şekilde ayarlandı.
+- Notification servisi, RabbitMQ üzerinden ilgili olaylara abone olarak kullanıcılara bildirimler gönderir.
+- E-posta bildirimleri, sistem tarafından otomatik olarak gönderilir.
 
 ## Monitoring Setup (Prometheus & Grafana)
 

@@ -358,15 +358,6 @@ export default function HomeScreen() {
         return userIssueId === currentIssueId;
       });
       
-      // Check if status is in progress (1) - ONLY in progress for other users
-      const statusStr = String(issue.status || '').toLowerCase();
-      const isInProgress = statusStr === 'in_progress' || 
-                           statusStr === 'inprogress' ||
-                           statusStr === 'in progress' ||
-                           statusStr === 'processing' ||
-                           statusStr === '1' ||
-                           issue.status === 1;
-      
       // Check if coordinates are valid
       const hasValidCoords = 
         issue.latitude !== undefined && 
@@ -374,7 +365,9 @@ export default function HomeScreen() {
         issue.latitude !== 0 && 
         issue.longitude !== 0;
       
-      return !isUserIssue && isInProgress && hasValidCoords;
+      // Sadece kullanıcının olmayan ve geçerli koordinatlara sahip sorunları göster
+      // Not: isInProgress kontrolünü kaldırdık, artık tüm statuslar gösterilecek
+      return !isUserIssue && hasValidCoords;
     })
     .forEach(issue => {
       // Koordinat anahtarı oluştur
@@ -485,15 +478,6 @@ export default function HomeScreen() {
         return userIssueId === currentIssueId;
       });
       
-      // Check if status is in progress (1) - ONLY in progress for other users
-      const statusStr = String(issue.status || '').toLowerCase();
-      const isInProgress = statusStr === 'in_progress' || 
-                           statusStr === 'inprogress' ||
-                           statusStr === 'in progress' ||
-                           statusStr === 'processing' ||
-                           statusStr === '1' ||
-                           issue.status === 1;
-      
       // Check if coordinates are valid
       const hasValidCoords = 
         issue.latitude !== undefined && 
@@ -501,7 +485,9 @@ export default function HomeScreen() {
         issue.latitude !== 0 && 
         issue.longitude !== 0;
       
-      return !isUserIssue && isInProgress && hasValidCoords;
+      // Sadece kullanıcının olmayan ve geçerli koordinatlara sahip sorunları göster
+      // Not: isInProgress kontrolünü kaldırdık, artık tüm statuslar gösterilecek
+      return !isUserIssue && hasValidCoords;
     })
     .map((issue, index) => {
       const issueId = issue.hexId || (issue.id ? issue.id.toString() : '');
@@ -570,17 +556,11 @@ export default function HomeScreen() {
   console.log('Home - Auth context user:', user);
   console.log('Home - User profile state:', userProfile);
   console.log('Home - Calculated name:', getUserName());
-  console.log('Home - Map markers:', mapMarkers.length);
-  console.log('Home - Stats:', { receivedCount, inProgressCount, completedCount });
+
   
   // Debug log final markers
   console.log('Final map markers:', mapMarkers.length, 'markers created');
-  mapMarkers.forEach(marker => {
-    console.log('Marker:', {
-      title: marker.title,
-      coords: marker.coordinates
-    });
-  });
+  
   
   return (
     <View style={styles.container}>

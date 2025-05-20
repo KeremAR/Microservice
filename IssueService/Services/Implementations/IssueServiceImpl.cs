@@ -20,6 +20,8 @@ public class IssueServiceImpl : IIssueService
     private readonly IIssueRepository _repository;
     private readonly IMediator _mediator;
     private readonly Counter _issuesCreatedCounter;
+    private readonly Counter _issuesDeletedCounter;
+    private readonly Counter _issuesUpdatedCounter;
     private readonly IDatabase _redisDb;
     private readonly TimeSpan _defaultCacheExpiry = TimeSpan.FromMinutes(1);
 
@@ -29,11 +31,15 @@ public class IssueServiceImpl : IIssueService
         IIssueRepository repository,
         IMediator mediator,
         Counter issuesCreatedCounter,
+        Counter issuesDeletedCounter,
+        Counter issuesUpdatedCounter,
         IConnectionMultiplexer redisConnection)
     {
         _repository = repository;
         _mediator = mediator;
         _issuesCreatedCounter = issuesCreatedCounter;
+        _issuesDeletedCounter = issuesDeletedCounter;
+        _issuesUpdatedCounter = issuesUpdatedCounter;
         _redisDb = redisConnection.GetDatabase();
     }
 
@@ -79,6 +85,7 @@ public class IssueServiceImpl : IIssueService
             issue.Resolve();
 
         await _repository.UpdateStatusAsync(id, status);
+        _issuesUpdatedCounter.Inc();
 
         var sw = Stopwatch.StartNew();
         await _redisDb.KeyDeleteAsync(CacheKeyPrefixIssuesAll);
@@ -157,6 +164,7 @@ public class IssueServiceImpl : IIssueService
             await _redisDb.KeyDeleteAsync(CacheKeyPrefixIssuesAll);
             sw.Stop();
             Console.WriteLine($"Cache invalidated after deleting issue: {id}. Key: {CacheKeyPrefixIssuesAll} (took {sw.ElapsedMilliseconds}ms)");
+            _issuesDeletedCounter.Inc();
         }
         return result;
     }

@@ -5,6 +5,7 @@ import { Notification } from './entities/notification.entity';
 import * as nodemailer from 'nodemailer';
 import { NotificationEventPublisher } from './domain/events/notification.event.publisher';
 import { NotificationCreatedEvent, NotificationReadEvent, NotificationDeletedEvent } from './domain/events/notification.event';
+import { Counter } from 'prom-client';
 
 export interface CreateNotificationDto {
   userId: string;
@@ -13,6 +14,23 @@ export interface CreateNotificationDto {
   type: string;
   data?: any;
 }
+
+const notificationSentCounter = new Counter({
+  name: 'notification_sent_total',
+  help: 'Toplam gönderilen bildirim sayısı',
+});
+const notificationFailedCounter = new Counter({
+  name: 'notification_failed_total',
+  help: 'Toplam başarısız bildirim sayısı',
+});
+const notificationReadCounter = new Counter({
+  name: 'notification_read_total',
+  help: 'Toplam okunan bildirim sayısı',
+});
+const notificationDeletedCounter = new Counter({
+  name: 'notification_deleted_total',
+  help: 'Toplam silinen bildirim sayısı',
+});
 
 @Injectable()
 export class NotificationService {
@@ -39,6 +57,8 @@ export class NotificationService {
 
   private async sendEmail(userId: string, title: string, message: string): Promise<void> {
     if (!this.transporter) {
+      console.warn('SMTP transporter not configured. Email will not be sent.');
+      notificationFailedCounter.inc();
       return;
     }
 
@@ -49,8 +69,10 @@ export class NotificationService {
         subject: title,
         text: message,
       });
+      console.log(`Email sent to ${userId} with title: ${title}`);
     } catch (error) {
       console.error('Failed to send email:', error);
+      notificationFailedCounter.inc();
       // Don't throw the error to prevent notification creation failure
     }
   }
@@ -58,6 +80,11 @@ export class NotificationService {
   async createNotification(createNotificationDto: CreateNotificationDto) {
     const { userId, title, message, type, data } = createNotificationDto;
     
+    // Send email if type is 'email' or similar (logic can be expanded)
+    // For simplicity, let's assume all notifications might try to send an email if transporter is configured.
+    // You might want to make this conditional based on notification type or other logic.
+    await this.sendEmail(userId, title, message); 
+
     // Entity oluştur
     const notificationEntity = this.notificationRepository.create({
       userId,
@@ -85,6 +112,7 @@ export class NotificationService {
     }
     this.notifications.get(userId).push(notification);
     console.log(`Notification created for user ${userId}:`, notification);
+    notificationSentCounter.inc();
     return notification;
   }
 
@@ -101,6 +129,7 @@ export class NotificationService {
     const notification = userNotifications.find(n => n.id === notificationId);
     if (notification) {
       notification.read = true;
+      notificationReadCounter.inc();
       return notification;
     }
 
@@ -118,6 +147,7 @@ export class NotificationService {
     
     if (filteredNotifications.length !== initialLength) {
       this.notifications.set(userId, filteredNotifications);
+      notificationDeletedCounter.inc();
       return true;
     }
 

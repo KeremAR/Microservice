@@ -55,13 +55,13 @@ This section outlines the step-by-step interaction of microservices during the c
 - Kullanıcılar kampüsteki problemleri raporlayacak
 - Fotoğraf yükleme, kategori seçme (altyapı, temizlik vb.)
 - Sorunları listeleme, durum güncelleme
-- Redis veya benzeri bir sistem ile caching mekanizması eklenecek.
+- Redis ile caching mekanizması
 - RabbitMQ ile **"Issue Created"** event'i yayınlama
 - **Endpointler:**  
   - `POST /issues/report`
   - `GET /issues/{id}`
   - `PUT /issues/{id}/status`
-  - **EVENT:** Issue Created (Kafka / RabbitMQ ile yayınlanacak)
+  - **EVENT:** Issue Created (RabbitMQ ile yayınlanacak)
 
 ### 3️⃣ Department Service - Spring Boot – Java (PostgreSQL)
 - Kampüsteki farklı departmanlar sorunları çözmekle yükümlü
@@ -73,7 +73,7 @@ This section outlines the step-by-step interaction of microservices during the c
   - `GET /departments/{id} `
   - `POST /departments`
   - `GET /departments/{id}/issues`
-  - **EVENT LISTENER:** Issue Created (Kafka / RabbitMQ ile dinlenecek)
+  - **EVENT LISTENER:** Issue Created (RabbitMQ ile dinlenecek)
 
 ### 4️⃣ Notification Service  - Node.js – NestJS (PostgreSQL)
 - Kullanıcılara durum değişiklikleri hakkında bildirim gönderme
@@ -81,28 +81,30 @@ This section outlines the step-by-step interaction of microservices during the c
 - RabbitMQ ile **"Issue Status Updated"** event'ini dinleme ve bildirim gönderme
 - **Endpointler:**  
   - `POST /notifications/send`
-  - **EVENT LISTENER:** Issue Status Updated (Kafka / RabbitMQ)
+  - **EVENT LISTENER:** Issue Status Updated (RabbitMQ)
 
-### 5️⃣ Gateway Service  - Spring Cloud Gateway
+### 5️⃣ Gateway Service  - Node.js – Express.js
 - Tüm servislere tek bir noktadan erişim
 - Load balancing, authentication ve rate limiting
-- **Request Aggregation:** Kullanıcı bir sorgu yaptığında hem Issue Service hem Department Service'ten veri çekerek tek bir JSON döndürme
-- **Spring Cloud Gateway veya Kong API Gateway tercih edilebilir**
+- Reverse proxy özelliğiyle yönlendirme ve filtreleme
+- **Request Routing**: Her servis için özel yönlendirmeler
 
-### 6️⃣ Saga Service - Spring Boot – Java (Veritabanı?)
-- Dağıtık işlemleri (distributed transactions) yönetmek için Orkestrasyon tabanlı Saga Pattern uygular.
-- Özellikle "Issue Creation" gibi birden fazla servisi etkileyen iş akışlarının tutarlılığını sağlar.
-- Başarısız adımlarda telafi edici işlemleri (compensating transactions) tetikler.
-- **Teknoloji:** İş akışı yönetimi için Camunda, Temporal veya basit Spring bileşenleri kullanılabilir.
+### 6️⃣ Redis Cache Service
+- User Service ve Issue Service için hızlı önbellek sunar
+- Authentication token caching (User Service)
+- Response caching (Issue Service)
+- Performans optimizasyonu ve yük yönetimi
 
 ### 7️⃣ Testing & Monitoring
-- İlerde tartışılır eklenir
+- Prometheus ile metrik toplama
+- Grafana ile görselleştirme
+- Her servisin sağlık durumu ve performansı izlenir
 
 ---
 
 ## 🚀 Deployment:
 ✅ **Docker**: Her mikroservis için bir Docker image oluşturacağız.  
-✅ **Kubernetes**: Bu container'ları yönetmek için Kubernetes kullanacağız.  
+✅ **Docker Compose**: Tüm servislerin kolay bir şekilde yönetilmesi için Docker Compose kullanıyoruz.
 
 ## 📄 Documentation:
 📌 **Swagger**: API dökümantasyonu için kullanılacak.
@@ -135,7 +137,7 @@ Sorunlar harita üzerinde gösterilir, böylece yoğun şikayet alanları belirl
 
 ---
 
-### 🔔 Notification Service & Gateway Entegrasyonu (2025)
+### 🔔 Notification Service & Gateway Entegrasyonu
 
 - **Notification Service** artık doğrudan dışarıya açılmak yerine, sadece Gateway üzerinden erişilebilecek şekilde yapılandırıldı.
 - Gateway üzerinden notification işlemleri için aşağıdaki endpointler kullanılabilir:
@@ -169,75 +171,82 @@ This project uses Prometheus for metrics collection and Grafana for visualizatio
 
 *   **`monitoring/grafana/dashboards/campus-caution-dashboard.json`:** The main dashboard showing service health (`up` metric), gateway request rates/durations, user registration counts/rates, and issue creation counts/rates.
 
-## Kubernetes Deployment
+## Environment Configuration
 
-Bu proje, farklı mikroservislerin Kubernetes kullanılarak deploy edilmesini sağlayan yapılandırma dosyalarını içerir.
-
-### Gereksinimler
-
-- Docker
-- Kubernetes (minikube, kind, Docker Desktop, veya bir Kubernetes kümesi)
-- kubectl
-
-### Docker Image'larını Oluşturma ve Push Etme
-
-Docker image'larını oluşturmak ve bir registry'ye göndermek için:
+To run the entire microservice project using Docker, you need to create a `.env` file in the root directory of the project (next to the docker-compose.yml file) with the following environment variables:
 
 ```bash
-# Script'i çalıştırılabilir hale getir
-chmod +x ./scripts/build-and-push.sh
+# Microservices Environment Configuration
 
-# Docker Hub veya başka bir registry'ye giriş yap
-docker login
+# User Service - Supabase Credentials
+SUPABASE_DB_HOST=ahrhnlmeimlxttvujmpa.supabase.co
+SUPABASE_DB_PORT=5432
+SUPABASE_DB_NAME=postgres
+SUPABASE_DB_USER=postgres
+SUPABASE_DB_PASSWORD=Qfnr9GtwhCrlVOK3
+SUPABASE_URL=https://ahrhnlmeimlxttvujmpa.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFocmhubG1laW1seHR0dnVqbXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MDcxMjIsImV4cCI6MjA2MjI4MzEyMn0.6jJ1IxliIFw4zjBL5BO0Mycdrxnu1LyTLNuf_MKckio
 
-# Servisleri build et ve push et
-./scripts/build-and-push.sh
+# Redis Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# RabbitMQ Configuration
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_PORT=5672
+RABBITMQ_USER=user
+RABBITMQ_PASSWORD=password
+RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+
+# Department Service
+SPRING_DATASOURCE_URL=jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require
+
+# Issue Service
+MONGODB_CONNECTION_STRING=mongodb+srv://cefakarberkay:berkay01@campuscation.jtmagbt.mongodb.net/?retryWrites=true&w=majority&appName=CampusCation
+MONGODB_DATABASE=IssueDb
+
+# Notification Service
+DATABASE_HOST=aws-0-eu-central-1.pooler.supabase.com
+DATABASE_PORT=6543
+DATABASE_USERNAME=postgres.ahrhnlmeimlxttvujmpa
+DATABASE_PASSWORD=Qfnr9GtwhCrlVOK3
+DATABASE_NAME=postgres
+DATABASE_SSL=true
+NOTIFICATION_SERVICE_PORT=5004
+
+# API Gateway Service
+NODE_ENV=docker
+USER_SERVICE_URL=http://user-service:8000
+DEPARTMENT_SERVICE_URL=http://department-service:8083
+ISSUE_SERVICE_URL=http://issue-service:8080
+NOTIFICATION_SERVICE_URL=http://notification-service:5004
+
+# Grafana
+GF_SECURITY_ADMIN_USER=admin
+GF_SECURITY_ADMIN_PASSWORD=admin
+GF_USERS_ALLOW_SIGN_UP=false
+
+# PostgreSQL
+POSTGRES_PASSWORD=postgres
+POSTGRES_USER=postgres
+POSTGRES_DB=userdb
 ```
 
-### Kubernetes'e Deploy Etme
+The Docker Compose file is configured to use these environment variables for all services. Additionally:
 
-Mikroservisleri Kubernetes kümesine deploy etmek için:
+1. The User Service requires Firebase Authentication. Place the `serviceAccountKey.json` file in the root of the user-service directory.
 
-```bash
-# Script'i çalıştırılabilir hale getir
-chmod +x ./scripts/deploy-to-k8s.sh
-
-# Deploy işlemini başlat
-./scripts/deploy-to-k8s.sh
-```
-
-### Servis Ölçeklendirmesi
-
-User Service, varsayılan olarak 3 replica ile ölçeklendirilmiş olarak deploy edilir ve Horizontal Pod Autoscaler (HPA) ile otomatik olarak ölçeklendirilir.
-
-Otomatik ölçeklendirme durumunu kontrol etmek için:
-
-```bash
-kubectl get hpa user-service-hpa -n campus-caution
-```
-
-Replica sayısını manuel olarak değiştirmek için:
-
-```bash
-kubectl scale deployment/user-service --replicas=5 -n campus-caution
-```
-
-### Uygulamaya Erişim
-
-API Gateway servisi, aşağıdaki yöntemlerden biriyle erişilebilir:
-
-1. **Ingress (önerilen):** 
-   `/etc/hosts` dosyanıza `127.0.0.1 campus-caution.local` ekleyin ve 
-   http://campus-caution.local adresinden erişin
-
-2. **Port Forwarding:**
+2. To run the entire project with Docker Compose:
    ```bash
-   kubectl port-forward svc/api-gateway 3000:3000 -n campus-caution
+   docker-compose up --build
    ```
-   Ardından http://localhost:3000 adresinden erişin
 
-3. **LoadBalancer:** (Eğer destelenen bir Kubernetes kümesindeyseniz)
-   ```bash
-   kubectl get service api-gateway -n campus-caution
-   ```
-   External-IP adresi üzerinden erişin
+3. To access the services:
+   - API Gateway: http://localhost:3000
+   - User Service: http://localhost:5001
+   - Department Service: http://localhost:8083
+   - Issue Service: http://localhost:5003
+   - Notification Service: http://localhost:5004
+   - RabbitMQ: http://localhost:15672
+   - Prometheus: http://localhost:9090
+   - Grafana: http://localhost:3001

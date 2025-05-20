@@ -2,7 +2,8 @@ using IssueService.Domain.Common;
 using IssueService.Domain.IssueAggregate.Events;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
-using System.Text.Json.Serialization; // Varsayılan olarak System.Text.Json kabul edildi
+using System.Text.Json.Serialization;
+using MediatR;
 
 namespace IssueService.Domain.IssueAggregate;
 
@@ -36,14 +37,43 @@ public class Issue : BaseEntity
         Latitude = latitude;
         Longitude = longitude;
 
+        // Sadece yeni oluşturulduğunda event ekle
         AddEvent(new IssueCreatedEvent(this));
     }
 
-    public void Resolve()
+    public void UpdateStatus(IssueStatus newStatus)
     {
-        if (Status == IssueStatus.Resolved) return;
-        Status = IssueStatus.Resolved;
-        AddEvent(new IssueStatusChangedEvent(Id.ToString(), Status.ToString()));
+        Console.WriteLine($"UpdateStatus called. Current status: {Status}, New status: {newStatus}");
+        
+        if (Status == newStatus)
+        {
+            Console.WriteLine("Status is the same, no update needed");
+            return;
+        }
+        
+        var oldStatus = Status;
+        Status = newStatus;
+        Console.WriteLine($"Status updated from {oldStatus} to {newStatus}");
+        
+        // Sadece durum değişikliği eventi ekle
+        var statusChangedEvent = new IssueStatusChangedEvent(Id.ToString(), newStatus.ToString(), UserId, Title);
+        Console.WriteLine($"Creating IssueStatusChangedEvent: IssueId={Id}, NewStatus={newStatus}, UserId={UserId}, Title={Title}");
+        AddEvent(statusChangedEvent);
+        Console.WriteLine("Event added successfully");
+    }
+
+    // BaseEntity'den gelen Events koleksiyonunu override et
+    public override IReadOnlyCollection<INotification> Events => _events.AsReadOnly();
+    private readonly List<INotification> _events = new();
+
+    public void AddEvent(INotification @event)
+    {
+        _events.Add(@event);
+    }
+
+    public void ClearEvents()
+    {
+        _events.Clear();
     }
 
     // Mevcut Id özelliği (BaseEntity'den geliyor) ObjectId tipinde.

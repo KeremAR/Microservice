@@ -65,6 +65,10 @@ export default function CreateReportScreen() {
   const [location, setLocation] = useState<LocationData | null>(null); // Konum bilgisi
   const [isLoadingLocation, setIsLoadingLocation] = useState(false); // Konum yükleniyor mu?
   
+  // Input focus states
+  const [isTitleFocused, setIsTitleFocused] = useState(false);
+  const [isDescriptionFocused, setIsDescriptionFocused] = useState(false);
+  
   // Refs for inputs
   const descriptionInputRef = useRef<TextInput>(null);
   
@@ -329,8 +333,8 @@ export default function CreateReportScreen() {
       console.log('Foto yok, uyarı gösteriliyor');
       // Show confirmation dialog instead of just an alert
       Alert.alert(
-        'No Photos Added',
-        'Are you sure you want to continue without adding any photos?',
+        'No Photo Added',
+        'Are you sure you want to continue without adding a photo?',
         [
           {
             text: 'Cancel',
@@ -346,15 +350,15 @@ export default function CreateReportScreen() {
       return;
     }
     
-    if (step === 2 && !department && !isUnsureDepartment) {
-      console.log('Departman seçilmemiş, uyarı gösteriliyor');
-      Alert.alert('Department Required', 'Please select a department or check the "I\'m not sure" option.');
+    if (step === 2 && (!description || !title)) {
+      console.log('Başlık veya açıklama eksik, uyarı gösteriliyor');
+      Alert.alert('Information Required', 'Please provide both a title and description for the issue.');
       return;
     }
     
-    if (step === 3 && (!description || !title)) {
-      console.log('Başlık veya açıklama eksik, uyarı gösteriliyor');
-      Alert.alert('Information Required', 'Please provide both a title and description for the issue.');
+    if (step === 3 && !department && !isUnsureDepartment) {
+      console.log('Departman seçilmemiş, uyarı gösteriliyor');
+      Alert.alert('Department Required', 'Please select a department or check the "I\'m not sure" option.');
       return;
     }
     
@@ -473,7 +477,8 @@ export default function CreateReportScreen() {
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        setPhotos([...photos, {
+        // Replace photos array with single photo instead of appending
+        setPhotos([{
           id: `camera_${Date.now()}`,
           uri: asset.uri,
           type: 'camera'
@@ -494,18 +499,18 @@ export default function CreateReportScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false, // Disable crop/edit step
         quality: 0.7,
-        allowsMultipleSelection: true,
-        selectionLimit: 5,
+        allowsMultipleSelection: false,
+        selectionLimit: 1,
       });
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newPhotos = result.assets.map(asset => ({
-          id: `gallery_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        const asset = result.assets[0];
+        // Replace photos array with single photo instead of mapping
+        setPhotos([{
+          id: `gallery_${Date.now()}`,
           uri: asset.uri,
           type: 'gallery' as const
-        }));
-        
-        setPhotos([...photos, ...newPhotos]);
+        }]);
       }
     } catch (error) {
       console.error('Error selecting from gallery:', error);
@@ -520,8 +525,8 @@ export default function CreateReportScreen() {
   const getStepTitle = () => {
     switch (step) {
       case 1: return "Add Photos";
-      case 2: return "Select Department";
-      case 3: return "Describe the Issue";
+      case 2: return "Describe the Issue";
+      case 3: return "Select Department";
       case 4: return "Report Submitted";
       default: return "Report an Issue";
     }
@@ -539,173 +544,273 @@ export default function CreateReportScreen() {
       case 1:
         console.log('Adım 1 (Foto) içeriği render ediliyor');
         return (
-          <View style={{gap: 24, alignItems: 'center', padding: 20}}>
-            <Text style={{textAlign: 'center', marginBottom: 16}}>
-              Please add at least one photo of the issue to help us better understand the problem.
+          <View style={{flex: 1}}>
+            <Text style={{
+              fontSize: 16, 
+              color: '#1F2937', 
+              marginBottom: 20,
+              paddingHorizontal: 20,
+              paddingTop: 20
+            }}>
+              Please add a photo of the issue to help us better understand the problem.
             </Text>
             
-            {/* Single Add Photo Button - Mavi Tasarım */}
-            <View
-              style={{
-                backgroundColor: '#EBF5FF',
-                padding: 24,
-                borderRadius: 12,
-                width: '80%',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 16, // Reduced marginBottom to make room for location info
-                borderColor: '#BFDBFE',
-                borderWidth: 1,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.2,
-                shadowRadius: 1.5,
-                elevation: 2,
-                overflow: 'hidden'
-              }}
-            >
-              {/* Background pattern for visual interest */}
-              <View 
-                style={{
-                  position: 'absolute', 
-                  right: -20, 
-                  bottom: -20, 
-                  width: 120, 
-                  height: 120, 
-                  borderRadius: 100,
-                  backgroundColor: '#DBEAFE',
-                  opacity: 0.8
-                }}
-              />
-              <View 
-                style={{
-                  position: 'absolute', 
-                  left: -15, 
-                  top: -15, 
-                  width: 80, 
-                  height: 80, 
-                  borderRadius: 100,
-                  backgroundColor: '#DBEAFE',
-                  opacity: 0.5
-                }}
-              />
-              
-              <Pressable 
-                onPress={openPhotoOptionsSheet}
-                style={{
-                  width: '100%',
-                  alignItems: 'center'
-                }}
-              >
-                <View
+            {/* Full Screen Photo Upload Area */}
+            <View style={{flex: 1}}>
+              {photos.length > 0 ? (
+                <View style={{flex: 1, position: 'relative'}}>
+                  <Image 
+                    source={{ uri: photos[0].uri }} 
+                    style={{
+                      width: '100%',
+                      height: '100%'
+                    }}
+                    resizeMode="cover"
+                  />
+                  
+                  {/* Overlay buttons for actions */}
+                  <View style={{
+                    position: 'absolute', 
+                    bottom: 0, 
+                    left: 0, 
+                    right: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    flexDirection: 'row',
+                    padding: 16
+                  }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row'
+                      }}
+                      onPress={openPhotoOptionsSheet}
+                    >
+                      <Ionicons name="camera-outline" size={20} color="#fff" />
+                      <Text style={{color: '#fff', marginLeft: 8, fontWeight: '500'}}>Change</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row'
+                      }}
+                      onPress={() => removePhoto(photos[0].id)}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#fff" />
+                      <Text style={{color: '#fff', marginLeft: 8, fontWeight: '500'}}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={openPhotoOptionsSheet}
                   style={{
-                    backgroundColor: 'white',
-                    padding: 16,
-                    marginBottom: 12,
-                    borderRadius: 100,
-                    borderColor: '#93C5FD',
-                    borderWidth: 1,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 1,
-                    elevation: 1
+                    flex: 1,
+                    backgroundColor: '#F3F4F6',
+                    justifyContent: 'center',
+                    alignItems: 'center'
                   }}
                 >
-                  <Ionicons name="camera" size={32} color="#1E40AF" />
-                </View>
-                <Text style={{fontSize: 18, fontWeight: '600', color: '#1E40AF'}}>Add Photo</Text>
-                <Text style={{fontSize: 12, color: '#3B82F6', marginTop: 4}}>Tap to select from camera or gallery</Text>
-              </Pressable>
-            </View>
-            
-            {/* Location Information */}
-            <View style={{
-              backgroundColor: '#F0FDF4',
-              padding: 12,
-              borderRadius: 8,
-              width: '80%',
-              alignItems: 'center',
-              borderColor: '#D1FAE5',
-              borderWidth: 1,
-              marginBottom: 16
-            }}>
-              {renderLocationInfo()}
-            </View>
-            
-            {photos.length > 0 && (
-              <View style={{gap: 16, width: '100%'}}>
-                <Text style={{color: '#047857', marginBottom: 8}}>
-                  {photos.length} photo{photos.length > 1 ? 's' : ''} added
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={{flexDirection: 'row', gap: 8}}>
-                    {photos.map((photo) => (
-                      <View key={photo.id} style={{position: 'relative'}}>
-                        <Image 
-                          source={{ uri: photo.uri }} 
-                          style={{
-                            width: 100,
-                            height: 100,
-                            borderRadius: 8
-                          }}
-                        />
-                        <Pressable
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            right: 0,
-                            backgroundColor: 'rgba(0,0,0,0.8)',
-                            borderRadius: 100,
-                            padding: 4
-                          }}
-                          onPress={() => removePhoto(photo.id)}
-                        >
-                          <Ionicons name="close" size={12} color="white" />
-                        </Pressable>
-                      </View>
-                    ))}
+                  <View style={{alignItems: 'center'}}>
+                    <Ionicons name="camera" size={48} color="#6B7280" />
+                    <Text style={{marginTop: 12, color: '#4B5563', fontSize: 16, fontWeight: '500'}}>
+                      Tap to add a photo
+                    </Text>
+                    <Text style={{marginTop: 4, color: '#9CA3AF', fontSize: 14}}>
+                      Choose from gallery or take a new photo
+                    </Text>
                   </View>
-                </ScrollView>
-              </View>
-            )}
+                </Pressable>
+              )}
+            </View>
           </View>
         );
         
       case 2:
-        console.log('Adım 2 (Departman) içeriği render ediliyor');
+        console.log('Adım 2 (Açıklama) içeriği render ediliyor');
         return (
-          <View style={{gap: 16, padding: 20}}>
-            <Text style={{fontSize: 18, fontWeight: '500', color: '#1F2937', marginBottom: 16}}>
-              Please select the department that should handle this issue.
-            </Text>
-            
-            {/* Department Selection - Clean Design */}
-            <View
-              style={{
-                backgroundColor: 'white',
-                padding: 20,
-                borderRadius: 12,
-                width: '100%',
-                marginBottom: 20,
-                borderWidth: 1,
-                borderColor: '#E5E7EB',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 3,
-                elevation: 2
-              }}
-            >
-              <Text style={{fontSize: 16, fontWeight: '500', color: '#4B5563', marginBottom: 12}}>Department</Text>
+          <View style={{flex: 1, backgroundColor: '#FFFFFF'}}>
+            <View style={{paddingHorizontal: 16, paddingVertical: 20, gap: 24}}>
+              {/* Kısa ve öz başlık */}
+              <Text style={{
+                fontSize: 17, 
+                fontWeight: '600', 
+                color: '#111827',
+              }}>
+                Issue Details
+              </Text>
               
-              <View style={{width: '100%'}}>
+              {/* Taşınan ipuçları bölümü */}
+              <View style={{
+                flexDirection: 'row',
+                backgroundColor: '#F3F4F6',
+                borderRadius: 12,
+                padding: 14,
+                gap: 10,
+                alignItems: 'flex-start',
+                marginBottom: 4
+              }}>
+                <Ionicons name="information-circle-outline" size={22} color="#4B5563" />
+                <View style={{flex: 1}}>
+                  <Text style={{
+                    fontSize: 15,
+                    fontWeight: '500',
+                    color: '#374151',
+                    marginBottom: 4
+                  }}>
+                    For a more effective report:
+                  </Text>
+                  <Text style={{
+                    fontSize: 14,
+                    lineHeight: 20, 
+                    color: '#4B5563'
+                  }}>
+                    • Be specific about the location and time
+                  </Text>
+                  <Text style={{
+                    fontSize: 14,
+                    lineHeight: 20, 
+                    color: '#4B5563'
+                  }}>
+                    • Describe any safety concerns
+                  </Text>
+                </View>
+              </View>
+              
+              {/* Title Field */}
+              <View style={{marginBottom: 8}}>
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: 8,
+                  paddingLeft: 2
+                }}>
+                  Title
+                </Text>
+                
+                <TextInput
+                  style={{
+                    fontSize: 16,
+                    color: '#111827',
+                    borderBottomWidth: 1,
+                    borderBottomColor: isTitleFocused ? '#3B82F6' : '#D1D5DB',
+                    paddingVertical: 10,
+                    paddingHorizontal: 2,
+                    backgroundColor: isTitleFocused ? '#F9FAFB' : 'transparent'
+                  }}
+                  placeholder="What's the issue about?"
+                  value={title}
+                  onChangeText={setTitle}
+                  autoCapitalize="sentences"
+                  returnKeyType="next"
+                  onFocus={() => setIsTitleFocused(true)}
+                  onBlur={() => setIsTitleFocused(false)}
+                  onSubmitEditing={() => {
+                    if (descriptionInputRef.current) {
+                      descriptionInputRef.current.focus();
+                    }
+                  }}
+                />
+              </View>
+              
+              {/* Description Field */}
+              <View>
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: 8,
+                  paddingLeft: 2
+                }}>
+                  Description
+                </Text>
+                
+                <TextInput
+                  style={{
+                    fontSize: 16,
+                    color: '#111827',
+                    borderWidth: 1,
+                    borderColor: isDescriptionFocused ? '#3B82F6' : '#D1D5DB',
+                    borderRadius: 12,
+                    padding: 16,
+                    height: 180,
+                    textAlignVertical: 'top',
+                    backgroundColor: isDescriptionFocused ? '#FFFFFF' : '#FAFAFA'
+                  }}
+                  placeholder="Describe what you've observed in detail..."
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline={true}
+                  numberOfLines={8}
+                  autoCapitalize="sentences"
+                  ref={descriptionInputRef}
+                  onFocus={() => setIsDescriptionFocused(true)}
+                  onBlur={() => setIsDescriptionFocused(false)}
+                />
+              </View>
+            </View>
+          </View>
+        );
+        
+      case 3:
+        console.log('Adım 3 (Departman) içeriği render ediliyor');
+        return (
+          <View style={{flex: 1, backgroundColor: '#FFFFFF'}}>
+            <View style={{paddingHorizontal: 16, paddingVertical: 20, gap: 24}}>
+              {/* Kısa ve öz başlık */}
+              <Text style={{
+                fontSize: 17, 
+                fontWeight: '600', 
+                color: '#111827',
+              }}>
+                Department Selection
+              </Text>
+              
+              {/* Bilgilendirme kartı */}
+              <View style={{
+                flexDirection: 'row',
+                backgroundColor: '#F3F4F6',
+                borderRadius: 12,
+                padding: 14,
+                gap: 10,
+                alignItems: 'flex-start',
+                marginBottom: 4
+              }}>
+                <Ionicons name="information-circle-outline" size={22} color="#4B5563" />
+                <View style={{flex: 1}}>
+                  <Text style={{
+                    fontSize: 15,
+                    lineHeight: 20, 
+                    color: '#4B5563'
+                  }}>
+                    The department you select will be responsible for addressing your reported issue.
+                  </Text>
+                </View>
+              </View>
+              
+              {/* Department Selector */}
+              <View style={{marginBottom: 8}}>
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: 8,
+                  paddingLeft: 2
+                }}>
+                  Choose Department
+                </Text>
+                
                 <Pressable 
                   style={{
-                    borderColor: '#D1D5DB', 
-                    borderRadius: 8, 
                     borderWidth: 1,
-                    height: 48,
+                    borderColor: '#D1D5DB',
+                    borderRadius: 8,
+                    height: 50,
                     paddingHorizontal: 12,
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -715,202 +820,102 @@ export default function CreateReportScreen() {
                   onPress={openDepartmentSheet}
                   disabled={isUnsureDepartment}
                 >
-                  <Text 
-                    style={{
-                      fontSize: 16, 
-                      color: department ? '#1F2937' : '#9CA3AF',
-                      opacity: isUnsureDepartment ? 0.5 : 1
-                    }}
-                  >
-                    {department 
-                      ? mockDepartments[parseInt(department, 10)]?.name || 'Select a department'
-                      : 'Select a department'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={24} color="#9CA3AF" />
+                  <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                    <Ionicons 
+                      name="business-outline" 
+                      size={20} 
+                      color={department ? '#111827' : '#9CA3AF'} 
+                      style={{marginRight: 10, opacity: isUnsureDepartment ? 0.5 : 1}}
+                    />
+                    <Text 
+                      style={{
+                        fontSize: 16, 
+                        color: department ? '#111827' : '#9CA3AF',
+                        opacity: isUnsureDepartment ? 0.5 : 1
+                      }}
+                    >
+                      {department 
+                        ? mockDepartments[parseInt(department, 10)]?.name || 'Select a department'
+                        : 'Select a department'}
+                    </Text>
+                  </View>
+                  <Ionicons 
+                    name="chevron-down" 
+                    size={20} 
+                    color="#9CA3AF" 
+                    style={{opacity: isUnsureDepartment ? 0.5 : 1}}
+                  />
                 </Pressable>
               </View>
-            </View>
-            
-            {/* "I'm not sure" Option - Clean Design */}
-            <View
-              style={{
-                backgroundColor: 'white',
-                padding: 16,
-                borderRadius: 12,
-                width: '100%',
-                borderWidth: 1,
-                borderColor: '#E5E7EB',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 3,
-                elevation: 2
-              }}
-            >
-              <Pressable 
-                style={{
-                  flexDirection: 'row', 
-                  alignItems: 'center',
-                  padding: 8
-                }}
-                onPress={handleUnsureDepartmentChange}
-              >
-                <View 
+              
+              {/* "I'm not sure" Option */}
+              <View style={{marginTop: 4}}>
+                <Pressable 
                   style={{
-                    width: 24, 
-                    height: 24, 
-                    borderWidth: 2,
-                    borderColor: isUnsureDepartment ? '#1E40AF' : '#D1D5DB',
-                    borderRadius: 4,
-                    backgroundColor: isUnsureDepartment ? '#1E40AF' : 'white',
+                    flexDirection: 'row', 
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 12
+                    backgroundColor: isUnsureDepartment ? '#F0F9FF' : 'white',
+                    padding: 12,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: isUnsureDepartment ? '#BAE6FD' : '#E5E7EB'
                   }}
+                  onPress={handleUnsureDepartmentChange}
                 >
-                  {isUnsureDepartment && <Ionicons name="checkmark" size={16} color="white" />}
-                </View>
-                <View style={{flex: 1}}>
-                  <Text style={{fontSize: 16, fontWeight: '500', color: '#1F2937'}}>
-                    I'm not sure which department handles this
-                  </Text>
-                  <Text style={{fontSize: 14, color: '#6B7280'}}>
-                    We'll automatically assign it to the right department
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-        );
-        
-      case 3:
-        console.log('Adım 3 (Açıklama) içeriği render ediliyor');
-        return (
-          <View style={{gap: 16, padding: 20}}>
-            <Text style={{fontSize: 18, fontWeight: '500', color: '#1F2937', marginBottom: 8}}>
-              Please provide a title and detailed description of the issue to help us address it efficiently.
-            </Text>
-            
-            {/* Combined Title and Description in one Box */}
-            <View
-              style={{
-                backgroundColor: '#EBF5FF',
-                padding: 24,
-                borderRadius: 12,
-                width: '100%',
-                marginBottom: 16,
-                borderColor: '#BFDBFE',
-                borderWidth: 1,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.2,
-                shadowRadius: 1.5,
-                elevation: 2,
-                overflow: 'hidden'
-              }}
-            >
-              {/* Background pattern for visual interest */}
-              <View 
-                style={{
-                  position: 'absolute', 
-                  right: -20, 
-                  bottom: -20, 
-                  width: 120, 
-                  height: 120, 
-                  borderRadius: 100,
-                  backgroundColor: '#DBEAFE',
-                  opacity: 0.6
-                }}
-              />
-              <View 
-                style={{
-                  position: 'absolute', 
-                  left: -15, 
-                  top: -15, 
-                  width: 80, 
-                  height: 80, 
-                  borderRadius: 100,
-                  backgroundColor: '#DBEAFE',
-                  opacity: 0.4
-                }}
-              />
-              
-              {/* Title Input */}
-              <Text style={{fontSize: 16, fontWeight: '600', color: '#1E40AF', marginBottom: 12}}>
-                Title
-              </Text>
-              
-              <View style={{width: '100%', zIndex: 1, marginBottom: 16}}>
-                <TextInput
-                  style={{
-                    height: 48,
-                    backgroundColor: 'white',
-                    borderColor: '#93C5FD',
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    padding: 12,
-                    fontSize: 16,
-                    color: '#1F2937',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 1,
-                    elevation: 1
-                  }}
-                  placeholder="Enter a brief title for the issue"
-                  value={title}
-                  onChangeText={setTitle}
-                  autoCapitalize="sentences"
-                  returnKeyType="next"
-                  onSubmitEditing={() => {
-                    // Focus the description input when submit is pressed on title
-                    if (descriptionInputRef.current) {
-                      descriptionInputRef.current.focus();
-                    }
-                  }}
-                />
+                  <View 
+                    style={{
+                      width: 20, 
+                      height: 20, 
+                      borderWidth: 2,
+                      borderColor: isUnsureDepartment ? '#0284C7' : '#D1D5DB',
+                      borderRadius: 4,
+                      backgroundColor: isUnsureDepartment ? '#0284C7' : 'white',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12
+                    }}
+                  >
+                    {isUnsureDepartment && <Ionicons name="checkmark" size={14} color="white" />}
+                  </View>
+                  <View style={{flex: 1}}>
+                    <Text style={{
+                      fontSize: 15, 
+                      fontWeight: '500', 
+                      color: isUnsureDepartment ? '#0C4A6E' : '#374151'
+                    }}>
+                      I'm not sure which department handles this
+                    </Text>
+                    <Text style={{
+                      fontSize: 13, 
+                      color: isUnsureDepartment ? '#0369A1' : '#6B7280',
+                      marginTop: 2
+                    }}>
+                      We'll automatically assign it to the right department
+                    </Text>
+                  </View>
+                </Pressable>
               </View>
               
-              <Text style={{fontSize: 12, color: '#3B82F6', marginBottom: 16}}>
-                A clear title helps identify your issue quickly
-              </Text>
-              
-              {/* Description Input */}
-              <Text style={{fontSize: 16, fontWeight: '600', color: '#1E40AF', marginBottom: 12}}>
-                Description
-              </Text>
-              
-              <View style={{width: '100%', zIndex: 1}}>
-                <TextInput
-                  style={{
-                    height: 180,
-                    backgroundColor: 'white',
-                    borderColor: '#93C5FD',
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    padding: 12,
-                    textAlignVertical: 'top',
-                    fontSize: 16,
-                    color: '#1F2937',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 1,
-                    elevation: 1
-                  }}
-                  placeholder="Describe the issue in detail"
-                  value={description}
-                  onChangeText={setDescription}
-                  multiline={true}
-                  numberOfLines={6}
-                  autoCapitalize="sentences"
-                  ref={descriptionInputRef}
-                />
-              </View>
-              
-              <Text style={{fontSize: 12, color: '#3B82F6', marginTop: 12}}>
-                Detailed descriptions help us resolve issues faster
-              </Text>
+              {/* Eğer "I'm not sure" işaretlenmişse açıklama paneli */}
+              {isUnsureDepartment && (
+                <View style={{
+                  backgroundColor: '#EFF6FF',
+                  padding: 14,
+                  borderRadius: 12,
+                  marginTop: 8,
+                  borderLeftWidth: 3,
+                  borderLeftColor: '#93C5FD'
+                }}>
+                  <Text style={{
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: '#1E40AF',
+                    fontStyle: 'italic'
+                  }}>
+                    Our system will analyze your report details and route it to the most appropriate department for prompt resolution.
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         );
@@ -1481,6 +1486,25 @@ export default function CreateReportScreen() {
         <Text style={styles.headerTitle}>{getStepTitle()}</Text>
       </View>
       
+      {/* Location Status (above progress bar) */}
+      {step === 1 && location && (
+        <View style={{alignItems: 'center', marginBottom: 8}}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F0FDF4',
+            paddingVertical: 6,
+            paddingHorizontal: 12,
+            borderRadius: 16,
+          }}>
+            <Ionicons name="location" size={16} color="#047857" />
+            <Text style={{color: '#047857', marginLeft: 4, fontSize: 13}}>
+              Location information captured
+            </Text>
+          </View>
+        </View>
+      )}
+      
       {/* Step Status Indicator - Circles with connecting lines */}
       <View style={styles.stepIndicator}>
         <View style={styles.stepItem}>
@@ -1492,14 +1516,14 @@ export default function CreateReportScreen() {
         
         <View style={styles.stepItem}>
           <View style={step >= 2 ? styles.activeStep : styles.inactiveStep} />
-          <Text style={step === 2 ? styles.activeText : styles.inactiveText}>Department</Text>
+          <Text style={step === 2 ? styles.activeText : styles.inactiveText}>Description</Text>
         </View>
         
         <View style={step >= 3 ? [styles.connector, {backgroundColor: '#34D399'}] : styles.connector} />
         
         <View style={styles.stepItem}>
           <View style={step >= 3 ? styles.activeStep : styles.inactiveStep} />
-          <Text style={step === 3 ? styles.activeText : styles.inactiveText}>Description</Text>
+          <Text style={step === 3 ? styles.activeText : styles.inactiveText}>Department</Text>
         </View>
       </View>
       

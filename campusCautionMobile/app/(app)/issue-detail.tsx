@@ -9,7 +9,8 @@ import {
   Animated,
   Pressable,
   ActivityIndicator,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ import { getIssueDetails } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
+import { mockDepartments } from '../../data/mockData';
 
 // Token key
 const TOKEN_KEY = 'auth_token';
@@ -358,7 +360,21 @@ export default function IssueDetailScreen() {
   
   // Get department name
   const getDepartmentName = (issue: IssueDetail) => {
-    return issue.departmentName || `Department #${issue.departmentId || 'Unknown'}`;
+    // First, check if we have departmentName in the issue
+    if (issue.departmentName) {
+      return issue.departmentName;
+    }
+    
+    // If we have departmentId, try to find it in mockDepartments
+    if (issue.departmentId !== undefined) {
+      const department = mockDepartments.find(dept => dept.id === String(issue.departmentId));
+      if (department) {
+        return department.name;
+      }
+    }
+    
+    // Default fallback
+    return `Department #${issue.departmentId || 'Unknown'}`;
   };
   
   // Get location string
@@ -667,19 +683,6 @@ export default function IssueDetailScreen() {
                   
                   <View style={{ height: 1, backgroundColor: '#E5E7EB' }} />
                   
-                  {/* Location */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                    <View style={{ backgroundColor: '#FEE2E2', padding: 8, borderRadius: 8 }}>
-                      <Ionicons name="location" size={16} color="#EF4444" />
-                    </View>
-                    <View>
-                      <Text style={{ color: '#6B7280', fontSize: 12 }}>Location</Text>
-                      <Text style={{ fontWeight: '500' }}>{getLocationString(issue)}</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={{ height: 1, backgroundColor: '#E5E7EB' }} />
-                  
                   {/* Date */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                     <View style={{ backgroundColor: '#D1FAE5', padding: 8, borderRadius: 8 }}>
@@ -691,31 +694,52 @@ export default function IssueDetailScreen() {
                     </View>
                   </View>
                   
-                  {/* Status */}
                   <View style={{ height: 1, backgroundColor: '#E5E7EB' }} />
                   
+                  {/* Issue ID */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                    <View style={{ 
-                      backgroundColor: `${getStatusColor(issue.status)}20`, 
-                      padding: 8, 
-                      borderRadius: 8 
-                    }}>
-                      <Ionicons name="checkmark-circle" size={16} color={getStatusColor(issue.status)} />
+                    <View style={{ backgroundColor: '#FEE2E2', padding: 8, borderRadius: 8 }}>
+                      <Ionicons name="key" size={16} color="#EF4444" />
                     </View>
                     <View>
-                      <Text style={{ color: '#6B7280', fontSize: 12 }}>Current Status</Text>
-                      <Text style={{ 
-                        fontWeight: '500',
-                        color: getStatusColor(issue.status)
-                      }}>
-                        {getStatusLabel(issue.status)}
-                      </Text>
+                      <Text style={{ color: '#6B7280', fontSize: 12 }}>Issue ID</Text>
+                      <Text style={{ fontWeight: '500' }}>{issue.hexId}</Text>
                     </View>
                   </View>
                 </View>
               </View>
             </View>
           </View>
+          
+          {/* Photo Section - Only shown if photo exists */}
+          {issue.photoUrl && (
+            <View style={{ paddingHorizontal: 16, marginTop: 0, marginBottom: 32 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ backgroundColor: '#E0F2FE', padding: 8, borderRadius: 8, marginRight: 8 }}>
+                  <Ionicons name="image" size={16} color="#0284C7" />
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: '600' }}>Photo</Text>
+              </View>
+              
+              <View
+                style={{
+                  ...styles.cardShadow,
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  backgroundColor: 'white'
+                }}
+              >
+                <Image 
+                  source={{ uri: issue.photoUrl }} 
+                  style={{ 
+                    width: '100%', 
+                    height: 250,
+                    resizeMode: 'contain'
+                  }}
+                />
+              </View>
+            </View>
+          )}
         </Animated.View>
       </Animated.ScrollView>
       

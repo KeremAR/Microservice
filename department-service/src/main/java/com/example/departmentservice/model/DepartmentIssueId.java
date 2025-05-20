@@ -9,33 +9,33 @@ import java.util.Objects;
 public class DepartmentIssueId implements Serializable {
 
     @Column(name = "department_id")
-    private Long department_id;
+    private Long departmentId;
 
     @Column(name = "issue_id")
-    private String issue_id;
+    private String issueId;
 
     public DepartmentIssueId() {
     }
 
-    public DepartmentIssueId(Long department_id, String issue_id) {
-        this.department_id = department_id;
-        this.issue_id = issue_id;
+    public DepartmentIssueId(Long departmentId, String issueId) {
+        this.departmentId = departmentId;
+        this.issueId = issueId;
     }
 
-    public Long getDepartment_id() {
-        return department_id;
+    public Long getDepartmentId() {
+        return departmentId;
     }
 
-    public void setDepartment_id(Long department_id) {
-        this.department_id = department_id;
+    public void setDepartmentId(Long departmentId) {
+        this.departmentId = departmentId;
     }
 
-    public String getIssue_id() {
-        return issue_id;
+    public String getIssueId() {
+        return issueId;
     }
 
-    public void setIssue_id(String issue_id) {
-        this.issue_id = issue_id;
+    public void setIssueId(String issueId) {
+        this.issueId = issueId;
     }
 
     @Override
@@ -43,11 +43,11 @@ public class DepartmentIssueId implements Serializable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         DepartmentIssueId that = (DepartmentIssueId) o;
-        return Objects.equals(department_id, that.department_id) && Objects.equals(issue_id, that.issue_id);
+        return Objects.equals(departmentId, that.departmentId) && Objects.equals(issueId, that.issueId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(department_id, issue_id);
+        return Objects.hash(departmentId, issueId);
     }
 }

@@ -77,22 +77,32 @@ public class IssueServiceImpl : IIssueService
 
     public async Task UpdateIssueStatusAsync(string id, IssueStatus status)
     {
+        Console.WriteLine($"UpdateIssueStatusAsync called for ID: {id}, New Status: {status}");
+        
         var issue = await _repository.GetByIdAsync(id);
         if (issue == null)
             throw new KeyNotFoundException("Issue not found");
 
-        if (status == IssueStatus.Resolved)
-            issue.Resolve();
-
+        Console.WriteLine($"Current issue status: {issue.Status}, New status: {status}");
+        
+        // Önce repository'yi güncelle
         await _repository.UpdateStatusAsync(id, status);
+        Console.WriteLine("Repository updated successfully");
         _issuesUpdatedCounter.Inc();
+        // Sonra domain nesnesini güncelle
+        issue.UpdateStatus(status);
+        Console.WriteLine("Domain object updated successfully");
 
+        // Cache'i temizle
         var sw = Stopwatch.StartNew();
         await _redisDb.KeyDeleteAsync(CacheKeyPrefixIssuesAll);
         sw.Stop();
         Console.WriteLine($"Cache invalidated after updating issue: {id}. Key: {CacheKeyPrefixIssuesAll} (took {sw.ElapsedMilliseconds}ms)");
 
+        // Event'leri gönder
+        Console.WriteLine("Dispatching events...");
         await DispatchEventsAsync(issue);
+        Console.WriteLine("Events dispatched successfully");
     }
 
     public async Task<IEnumerable<Issue>> GetIssuesByUserIdAsync(string userId)
@@ -171,11 +181,14 @@ public class IssueServiceImpl : IIssueService
 
     private async Task DispatchEventsAsync(Issue issue)
     {
+        Console.WriteLine($"Dispatching events for issue {issue.Id}. Event count: {issue.Events.Count}");
         foreach (var @event in issue.Events)
         {
+            Console.WriteLine($"Dispatching event type: {@event.GetType().Name}");
             await _mediator.Publish(@event, CancellationToken.None);
         }
         issue.ClearEvents();
+        Console.WriteLine("Events cleared after dispatch");
     }
 
     private JsonSerializerOptions GetJsonSerializerOptions()

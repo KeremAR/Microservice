@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 using IssueService.Messaging.Interfaces;
 using System.Threading;
-using System; // Added for Console.WriteLine
+using System;
 
 namespace IssueService.Messaging.Implementations;
 
@@ -13,16 +13,15 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
     private IConnection _connection;
     private IModel _channel;
     private readonly string _issueCreatedQueueName;
-    private readonly string _issueStatusChangedQueueName; // New queue name
+    private readonly string _issueStatusChangedQueueName;
     private readonly IConfiguration _configuration;
     private readonly int _maxRetries = 5;
-    private readonly int _retryDelayMs = 2000; // 2 seconds
+    private readonly int _retryDelayMs = 2000;
 
     public RabbitMQProducer(IConfiguration configuration)
     {
         _configuration = configuration;
         _issueCreatedQueueName = configuration["RabbitMQ:QueueName"] ?? "issue_created";
-        // Read the new queue name from configuration, default to "issue_status_changed"
         _issueStatusChangedQueueName = configuration["RabbitMQ:IssueStatusChangedQueueName"] ?? "issue_status_changed";
         
         ConnectToRabbitMQ();
@@ -30,60 +29,45 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
 
     private void ConnectToRabbitMQ()
     {
-        int retryCount = 0;
-        bool connected = false;
+        var factory = new ConnectionFactory
+        {
+            HostName = _configuration["RabbitMQ:HostName"] ?? "localhost",
+            UserName = _configuration["RabbitMQ:UserName"] ?? "guest",
+            Password = _configuration["RabbitMQ:Password"] ?? "guest",
+            Port = int.Parse(_configuration["RabbitMQ:Port"] ?? "5672")
+        };
 
-        while (!connected && retryCount < _maxRetries)
+        for (int i = 0; i < _maxRetries; i++)
         {
             try
             {
-                Console.WriteLine($"Attempt {retryCount + 1} to connect to RabbitMQ...");
-                
-                var factory = new ConnectionFactory
-                {
-                    HostName = _configuration["RabbitMQ:HostName"],
-                    Port = int.Parse(_configuration["RabbitMQ:Port"] ?? "5672"),
-                    UserName = _configuration["RabbitMQ:UserName"],
-                    Password = _configuration["RabbitMQ:Password"]
-                };
-
                 _connection = factory.CreateConnection();
                 _channel = _connection.CreateModel();
 
-                // Declare the issue_created queue
-                _channel.QueueDeclare(
-                    queue: _issueCreatedQueueName,
-                    durable: true,
-                    exclusive: false,
-                    autoDelete: false,
-                    arguments: null);
-                Console.WriteLine($"✨ Successfully declared queue: {_issueCreatedQueueName}");
+                // Exchange tanımla
+                _channel.ExchangeDeclare("issue_exchange", ExchangeType.Direct, true);
 
-                // Declare the issue_status_changed queue
-                _channel.QueueDeclare(
-                    queue: _issueStatusChangedQueueName,
-                    durable: true,
-                    exclusive: false,
-                    autoDelete: false,
-                    arguments: null);
-                Console.WriteLine($"✨ Successfully declared queue: {_issueStatusChangedQueueName}");
+                // Kuyrukları tanımla
+                _channel.QueueDeclare(_issueCreatedQueueName, true, false, false, null);
+                _channel.QueueDeclare(_issueStatusChangedQueueName, true, false, false, null);
 
-                Console.WriteLine($"✨ Successfully connected to RabbitMQ and declared queues.");
-                connected = true;
+                // Kuyrukları exchange'e bağla
+                _channel.QueueBind(_issueCreatedQueueName, "issue_exchange", "issue.created");
+                _channel.QueueBind(_issueStatusChangedQueueName, "issue_exchange", "issue.status_changed");
+
+                Console.WriteLine("Successfully connected to RabbitMQ");
+                return;
             }
             catch (Exception ex)
             {
-                retryCount++;
-                Console.WriteLine($"❌ Failed to connect to RabbitMQ (attempt {retryCount}/{_maxRetries}): {ex.Message}");
-                
-                if (retryCount < _maxRetries)
+                Console.WriteLine($"Failed to connect to RabbitMQ (attempt {i + 1}/{_maxRetries}): {ex.Message}");
+                if (i < _maxRetries - 1)
                 {
-                    Console.WriteLine($"Retrying in {_retryDelayMs}ms...");
                     Thread.Sleep(_retryDelayMs);
                 }
                 else
                 {
-                    Console.WriteLine("Maximum retry attempts reached. Failed to connect to RabbitMQ.");
+                    throw;
                 }
             }
         }
@@ -91,62 +75,50 @@ public class RabbitMQProducer : IRabbitMQProducer, IDisposable
 
     public void PublishIssueCreated(object message)
     {
-        PublishMessage(_issueCreatedQueueName, message);
+        PublishMessage(message, "issue.created", _issueCreatedQueueName);
     }
 
     public void PublishIssueStatusChanged(object message)
     {
-        PublishMessage(_issueStatusChangedQueueName, message);
+        PublishMessage(message, "issue.status_changed", _issueStatusChangedQueueName);
     }
 
-    private void PublishMessage(string queueName, object message)
+    private void PublishMessage(object message, string routingKey, string queueName)
     {
+        if (_channel == null || !_channel.IsOpen)
+        {
+            Console.WriteLine("Channel is not open, attempting to reconnect...");
+            ConnectToRabbitMQ();
+        }
+
         try
         {
-            if (_channel == null || _connection == null || !_connection.IsOpen)
-            {
-                Console.WriteLine("RabbitMQ connection is not available. Attempting to reconnect...");
-                ConnectToRabbitMQ();
-                
-                if (_channel == null || _connection == null || !_connection.IsOpen)
-                {
-                    Console.WriteLine($"❌ Cannot publish message to {queueName} - RabbitMQ connection is not available");
-                    return;
-                }
-            }
-
             var json = JsonSerializer.Serialize(message);
             var body = Encoding.UTF8.GetBytes(json);
 
-            Console.WriteLine($"[RabbitMQProducer] Publishing JSON: {json}");
+            var properties = _channel.CreateBasicProperties();
+            properties.Persistent = true;
+            properties.MessageId = Guid.NewGuid().ToString();
+            properties.Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
             _channel.BasicPublish(
-                exchange: "",
-                routingKey: queueName,
-                basicProperties: null,
+                exchange: "issue_exchange",
+                routingKey: routingKey,
+                basicProperties: properties,
                 body: body);
 
-            Console.WriteLine($"✨ Message published to queue {queueName} successfully: {json}");
+            Console.WriteLine($"Message published to {queueName} with routing key {routingKey}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error publishing message to queue {queueName}: {ex.Message}");
+            Console.WriteLine($"Error publishing message to {queueName}: {ex.Message}");
+            throw;
         }
     }
 
     public void Dispose()
     {
-        try
-        {
-            _channel?.Close();
-            _channel?.Dispose();
-            _connection?.Close();
-            _connection?.Dispose();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error during RabbitMQ disposal: {ex.Message}");
-        }
-        GC.SuppressFinalize(this); // Added to follow IDisposable pattern properly
+        _channel?.Dispose();
+        _connection?.Dispose();
     }
 } 

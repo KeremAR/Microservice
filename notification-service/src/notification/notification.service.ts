@@ -117,10 +117,15 @@ export class NotificationService {
   }
 
   async getNotificationsByUserId(userId: string) {
-    return this.notifications.get(userId) || [];
+    // Bildirimleri veritabanından userId'ye göre çek
+    return this.notificationRepository.find({ where: { userId } });
   }
 
   async markNotificationAsRead(userId: string, notificationId: string) {
+    // Önce veritabanında güncelle
+    await this.notificationRepository.update(notificationId, { isRead: true });
+
+    // Sonra bellekte de güncelle (varsa)
     const userNotifications = this.notifications.get(userId);
     if (!userNotifications) {
       return null;
@@ -132,11 +137,15 @@ export class NotificationService {
       notificationReadCounter.inc();
       return notification;
     }
-
-    return null;
+    // Sonucu döndürmek için veritabanından tekrar çekebilirsiniz
+    return this.notificationRepository.findOne({ where: { id: notificationId } });
   }
 
   async deleteNotification(userId: string, notificationId: string) {
+    // Önce veritabanından sil
+    await this.notificationRepository.delete(notificationId);
+
+    // Bellekten de sil (varsa)
     const userNotifications = this.notifications.get(userId);
     if (!userNotifications) {
       return false;

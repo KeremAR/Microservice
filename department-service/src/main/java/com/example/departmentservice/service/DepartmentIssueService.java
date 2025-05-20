@@ -16,9 +16,9 @@ public class DepartmentIssueService {
     }
 
     public List<String> getIssuesForDepartment(Long departmentId) {
-        List<DepartmentIssue> departmentIssues = departmentIssueRepository.findById_DepartmentId(departmentId);
+        List<DepartmentIssue> departmentIssues = departmentIssueRepository.findByIdDepartmentId(departmentId);
         return departmentIssues.stream()
-                .map(departmentIssue -> departmentIssue.getId().getIssue_id())
+                .map(departmentIssue -> departmentIssue.getId().getIssueId())
                 .collect(Collectors.toList());
     }
 }

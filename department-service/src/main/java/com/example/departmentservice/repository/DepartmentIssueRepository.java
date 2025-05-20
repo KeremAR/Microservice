@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface DepartmentIssueRepository extends JpaRepository<DepartmentIssue, DepartmentIssueId> {
 
-    List<DepartmentIssue> findById_DepartmentId(Long departmentId);
+    List<DepartmentIssue> findByIdDepartmentId(Long departmentId);
 }

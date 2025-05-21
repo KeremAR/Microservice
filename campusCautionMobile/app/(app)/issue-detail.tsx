@@ -636,10 +636,14 @@ export default function IssueDetailScreen() {
                         />
                       )}
                     </View>
-                    <View>
+                    <View style={{ flex: 1, maxWidth: '80%' }}>
                       <Text style={{ fontWeight: 'bold' }}>{statusItem.label}</Text>
                       <Text style={{ fontSize: 12, color: '#6B7280' }}>{formatDate(statusItem.date)}</Text>
-                      <Text style={{ fontSize: 14, marginTop: 4 }}>{statusItem.message}</Text>
+                      <Text 
+                        style={{ fontSize: 14, marginTop: 4 }}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >{statusItem.message}</Text>
                     </View>
                   </View>
                 ))}

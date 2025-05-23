@@ -831,8 +831,11 @@ export default function CreateReportScreen() {
                       style={{
                         fontSize: 16, 
                         color: department ? '#111827' : '#9CA3AF',
-                        opacity: isUnsureDepartment ? 0.5 : 1
+                        opacity: isUnsureDepartment ? 0.5 : 1,
+                        maxWidth: 220
                       }}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
                     >
                       {department 
                         ? mockDepartments[parseInt(department, 10)]?.name || 'Select a department'

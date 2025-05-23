@@ -2,7 +2,7 @@
 
 ## 🚀 Event Flow - Core Scenario: Reporting an Issue
 
-This section outlines the step-by-step interaction of microservices during the core user scenario of "Reporting an Issue." This flow helps in understanding the current and planned structure of the project.
+This section outlines the step-by-step interaction of microservices during the core user scenario of "Reporting an Issue." This flow helps in understanding the structure of the project.
 
 1.  **User Login (Mobile Frontend & User Service):**
     *   The user logs into the **Mobile Frontend** application using either their Microsoft account (Entra ID) or email/password.
@@ -10,7 +10,7 @@ This section outlines the step-by-step interaction of microservices during the c
 
 2.  **Issue Reporting (Mobile Frontend -> Issue Service):**
     *   The user reports a new issue (title, description, category, photo, etc.) through the mobile application interface (e.g., "Inform Us" button).
-    *   **Mobile Frontend** sends an HTTP POST request with this information to the `/issues/report` endpoint of the **Issue Service** (ASP.NET Core/C#). *(Note: This request might be routed through the Gateway in the future)*.
+    *   **Mobile Frontend** sends an HTTP POST request with this information to the `/issues/report` endpoint of the **Issue Service** (ASP.NET Core/C#). This request is routed through the API Gateway.
 
 3.  **Issue Processing and Saving (Issue Service):**
     *   **Issue Service** receives the request, validates it, and creates a new `Issue` object.
@@ -21,16 +21,16 @@ This section outlines the step-by-step interaction of microservices during the c
     *   A handler listening to the `IssueCreatedEvent` (`IssueCreatedHandler`) formats a message containing the event details (Issue ID, User ID, Category, etc.).
     *   It publishes this message to the central messaging system, **RabbitMQ** (to the `issue_created` queue/exchange).
 
-5.  **Department Notification (RabbitMQ -> Department Service - *Planned*):**
-    *   The **Department Service** (Java/Spring Boot - *Planned for development*) is intended to listen for the `IssueCreatedEvent` from RabbitMQ.
-    *   Upon receiving this event, the **Department Service** might process the relevant issue into its database, assign it to the appropriate department, or generate statistical data.
+5.  **Department Notification (RabbitMQ -> Department Service):**
+    *   The **Department Service** (Java/Spring Boot) listens for the `IssueCreatedEvent` from RabbitMQ.
+    *   Upon receiving this event, the **Department Service** processes the relevant issue into its database, assigns it to the appropriate department, and generates statistical data.
 
-6.  **User Notification (Issue Service -> RabbitMQ -> Notification Service - *Planned*):**
-    *   In the future, when the status of an issue changes within the **Issue Service** (e.g., "Resolved," "In Progress"), new events like `IssueStatusChangedEvent` will be published to RabbitMQ.
-    *   The **Notification Service** (Node.js/NestJS - *Planned for development*) will listen for these status change events.
-    *   Upon receiving the event, the **Notification Service** will send a status update notification to the original user who reported the issue, using methods like email, push notification, or SMS.
+6.  **User Notification (Issue Service -> RabbitMQ -> Notification Service):**
+    *   When the status of an issue changes within the **Issue Service** (e.g., "Resolved," "In Progress"), events like `IssueStatusChangedEvent` are published to RabbitMQ.
+    *   The **Notification Service** (Node.js/NestJS) listens for these status change events.
+    *   Upon receiving the event, the **Notification Service** sends a status update notification to the original user who reported the issue, using methods like email or push notification.
 
-**Summary:** In the current implementation, users can log in via the **Mobile Frontend** (using **User Service**) and report issues to the **Issue Service**. The **Issue Service** then publishes this event via **RabbitMQ**. The processing of these events by the department and notification services is planned for subsequent development phases.
+**Summary:** In this implementation, users can log in via the **Mobile Frontend** (using **User Service**) and report issues to the **Issue Service**. The **Issue Service** then publishes events via **RabbitMQ**, which are consumed by both the **Department Service** for assignment and the **Notification Service** for user updates.
 
 ---
 
@@ -55,13 +55,13 @@ This section outlines the step-by-step interaction of microservices during the c
 - Kullanıcılar kampüsteki problemleri raporlayacak
 - Fotoğraf yükleme, kategori seçme (altyapı, temizlik vb.)
 - Sorunları listeleme, durum güncelleme
-- Redis veya benzeri bir sistem ile caching mekanizması eklenecek.
+- Redis ile caching mekanizması
 - RabbitMQ ile **"Issue Created"** event'i yayınlama
 - **Endpointler:**  
   - `POST /issues/report`
   - `GET /issues/{id}`
   - `PUT /issues/{id}/status`
-  - **EVENT:** Issue Created (Kafka / RabbitMQ ile yayınlanacak)
+  - **EVENT:** Issue Created (RabbitMQ ile yayınlanacak)
 
 ### 3️⃣ Department Service - Spring Boot – Java (PostgreSQL)
 - Kampüsteki farklı departmanlar sorunları çözmekle yükümlü
@@ -73,36 +73,41 @@ This section outlines the step-by-step interaction of microservices during the c
   - `GET /departments/{id} `
   - `POST /departments`
   - `GET /departments/{id}/issues`
-  - **EVENT LISTENER:** Issue Created (Kafka / RabbitMQ ile dinlenecek)
+  - **EVENT LISTENER:** Issue Created (RabbitMQ ile dinlenecek)
 
 ### 4️⃣ Notification Service  - Node.js – NestJS (PostgreSQL)
 - Kullanıcılara durum değişiklikleri hakkında bildirim gönderme
-- E-posta, SMS veya push notification desteği
+- E-posta ve push notification desteği
 - RabbitMQ ile **"Issue Status Updated"** event'ini dinleme ve bildirim gönderme
 - **Endpointler:**  
-  - `POST /notifications/send`
-  - **EVENT LISTENER:** Issue Status Updated (Kafka / RabbitMQ)
+  - `POST /notification`
+  - `GET /notification/:userId`
+  - `PUT /notification/:id/read`
+  - `DELETE /notification/:id`
+  - **EVENT LISTENER:** Issue Status Updated (RabbitMQ)
 
-### 5️⃣ Gateway Service  - Spring Cloud Gateway
+### 5️⃣ Gateway Service  - Node.js – Express.js
 - Tüm servislere tek bir noktadan erişim
 - Load balancing, authentication ve rate limiting
-- **Request Aggregation:** Kullanıcı bir sorgu yaptığında hem Issue Service hem Department Service'ten veri çekerek tek bir JSON döndürme
-- **Spring Cloud Gateway veya Kong API Gateway tercih edilebilir**
+- Reverse proxy özelliğiyle yönlendirme ve filtreleme
+- **Request Routing**: Her servis için özel yönlendirmeler
 
-### 6️⃣ Saga Service - Spring Boot – Java (Veritabanı?)
-- Dağıtık işlemleri (distributed transactions) yönetmek için Orkestrasyon tabanlı Saga Pattern uygular.
-- Özellikle "Issue Creation" gibi birden fazla servisi etkileyen iş akışlarının tutarlılığını sağlar.
-- Başarısız adımlarda telafi edici işlemleri (compensating transactions) tetikler.
-- **Teknoloji:** İş akışı yönetimi için Camunda, Temporal veya basit Spring bileşenleri kullanılabilir.
+### 6️⃣ Redis Cache Service
+- User Service ve Issue Service için hızlı önbellek sunar
+- Authentication token caching (User Service)
+- Response caching (Issue Service)
+- Performans optimizasyonu ve yük yönetimi
 
 ### 7️⃣ Testing & Monitoring
-- İlerde tartışılır eklenir
+- Prometheus ile metrik toplama
+- Grafana ile görselleştirme
+- Her servisin sağlık durumu ve performansı izlenir
 
 ---
 
 ## 🚀 Deployment:
 ✅ **Docker**: Her mikroservis için bir Docker image oluşturacağız.  
-✅ **Kubernetes**: Bu container'ları yönetmek için Kubernetes kullanacağız.  
+✅ **Docker Compose**: Tüm servislerin kolay bir şekilde yönetilmesi için Docker Compose kullanıyoruz.
 
 ## 📄 Documentation:
 📌 **Swagger**: API dökümantasyonu için kullanılacak.
@@ -135,18 +140,18 @@ Sorunlar harita üzerinde gösterilir, böylece yoğun şikayet alanları belirl
 
 ---
 
-### 🔔 Notification Service & Gateway Entegrasyonu (2025)
+### 🔔 Notification Service & Gateway Entegrasyonu
 
-- **Notification Service** artık doğrudan dışarıya açılmak yerine, sadece Gateway üzerinden erişilebilecek şekilde yapılandırıldı.
+- **Notification Service** sadece Gateway üzerinden erişilebilecek şekilde yapılandırılmıştır.
 - Gateway üzerinden notification işlemleri için aşağıdaki endpointler kullanılabilir:
     - **POST** `/notification/notifications` : Bildirim oluşturma
     - **GET** `/notification/notifications/{userId}` : Kullanıcının bildirimlerini listeleme
     - **PUT** `/notification/notifications/{notificationId}/read` : Bildirimi okundu olarak işaretleme
     - **DELETE** `/notification/notifications/{notificationId}` : Bildirimi silme
 - Gateway, gelen istekleri notification servisine yönlendirir ve cevapları kullanıcıya iletir.
-- Notification servisi Docker ortamında environment değişkeninden portunu alacak şekilde güncellendi ve sadece 5004 portunda dinleyecek şekilde yapılandırıldı.
-- Dockerfile ve docker-compose ayarları bu yeni yapıya uygun olarak güncellendi.
-- Tüm testler başarıyla geçti ve sistem gateway üzerinden sorunsuz çalışmaktadır.
+- Notification servisi Docker ortamında environment değişkeninden portunu alacak şekilde yapılandırıldı ve sadece 5004 portunda dinleyecek şekilde ayarlandı.
+- Notification servisi, RabbitMQ üzerinden ilgili olaylara abone olarak kullanıcılara bildirimler gönderir.
+- E-posta bildirimleri, sistem tarafından otomatik olarak gönderilir.
 
 ## Monitoring Setup (Prometheus & Grafana)
 
@@ -169,75 +174,82 @@ This project uses Prometheus for metrics collection and Grafana for visualizatio
 
 *   **`monitoring/grafana/dashboards/campus-caution-dashboard.json`:** The main dashboard showing service health (`up` metric), gateway request rates/durations, user registration counts/rates, and issue creation counts/rates.
 
-## Kubernetes Deployment
+## Environment Configuration
 
-Bu proje, farklı mikroservislerin Kubernetes kullanılarak deploy edilmesini sağlayan yapılandırma dosyalarını içerir.
-
-### Gereksinimler
-
-- Docker
-- Kubernetes (minikube, kind, Docker Desktop, veya bir Kubernetes kümesi)
-- kubectl
-
-### Docker Image'larını Oluşturma ve Push Etme
-
-Docker image'larını oluşturmak ve bir registry'ye göndermek için:
+To run the entire microservice project using Docker, you need to create a `.env` file in the root directory of the project (next to the docker-compose.yml file) with the following environment variables:
 
 ```bash
-# Script'i çalıştırılabilir hale getir
-chmod +x ./scripts/build-and-push.sh
+# Microservices Environment Configuration
 
-# Docker Hub veya başka bir registry'ye giriş yap
-docker login
+# User Service - Supabase Credentials
+SUPABASE_DB_HOST=ahrhnlmeimlxttvujmpa.supabase.co
+SUPABASE_DB_PORT=5432
+SUPABASE_DB_NAME=postgres
+SUPABASE_DB_USER=postgres
+SUPABASE_DB_PASSWORD=Qfnr9GtwhCrlVOK3
+SUPABASE_URL=https://ahrhnlmeimlxttvujmpa.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFocmhubG1laW1seHR0dnVqbXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MDcxMjIsImV4cCI6MjA2MjI4MzEyMn0.6jJ1IxliIFw4zjBL5BO0Mycdrxnu1LyTLNuf_MKckio
 
-# Servisleri build et ve push et
-./scripts/build-and-push.sh
+# Redis Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# RabbitMQ Configuration
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_PORT=5672
+RABBITMQ_USER=user
+RABBITMQ_PASSWORD=password
+RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+
+# Department Service
+SPRING_DATASOURCE_URL=jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?user=postgres.ahrhnlmeimlxttvujmpa&password=Qfnr9GtwhCrlVOK3&sslmode=require
+
+# Issue Service
+MONGODB_CONNECTION_STRING=mongodb+srv://cefakarberkay:berkay01@campuscation.jtmagbt.mongodb.net/?retryWrites=true&w=majority&appName=CampusCation
+MONGODB_DATABASE=IssueDb
+
+# Notification Service
+DATABASE_HOST=aws-0-eu-central-1.pooler.supabase.com
+DATABASE_PORT=6543
+DATABASE_USERNAME=postgres.ahrhnlmeimlxttvujmpa
+DATABASE_PASSWORD=Qfnr9GtwhCrlVOK3
+DATABASE_NAME=postgres
+DATABASE_SSL=true
+NOTIFICATION_SERVICE_PORT=5004
+
+# API Gateway Service
+NODE_ENV=docker
+USER_SERVICE_URL=http://user-service:8000
+DEPARTMENT_SERVICE_URL=http://department-service:8083
+ISSUE_SERVICE_URL=http://issue-service:8080
+NOTIFICATION_SERVICE_URL=http://notification-service:5004
+
+# Grafana
+GF_SECURITY_ADMIN_USER=admin
+GF_SECURITY_ADMIN_PASSWORD=admin
+GF_USERS_ALLOW_SIGN_UP=false
+
+# PostgreSQL
+POSTGRES_PASSWORD=postgres
+POSTGRES_USER=postgres
+POSTGRES_DB=userdb
 ```
 
-### Kubernetes'e Deploy Etme
+The Docker Compose file is configured to use these environment variables for all services. Additionally:
 
-Mikroservisleri Kubernetes kümesine deploy etmek için:
+1. The User Service requires Firebase Authentication. Place the `serviceAccountKey.json` file in the root of the user-service directory.
 
-```bash
-# Script'i çalıştırılabilir hale getir
-chmod +x ./scripts/deploy-to-k8s.sh
-
-# Deploy işlemini başlat
-./scripts/deploy-to-k8s.sh
-```
-
-### Servis Ölçeklendirmesi
-
-User Service, varsayılan olarak 3 replica ile ölçeklendirilmiş olarak deploy edilir ve Horizontal Pod Autoscaler (HPA) ile otomatik olarak ölçeklendirilir.
-
-Otomatik ölçeklendirme durumunu kontrol etmek için:
-
-```bash
-kubectl get hpa user-service-hpa -n campus-caution
-```
-
-Replica sayısını manuel olarak değiştirmek için:
-
-```bash
-kubectl scale deployment/user-service --replicas=5 -n campus-caution
-```
-
-### Uygulamaya Erişim
-
-API Gateway servisi, aşağıdaki yöntemlerden biriyle erişilebilir:
-
-1. **Ingress (önerilen):** 
-   `/etc/hosts` dosyanıza `127.0.0.1 campus-caution.local` ekleyin ve 
-   http://campus-caution.local adresinden erişin
-
-2. **Port Forwarding:**
+2. To run the entire project with Docker Compose:
    ```bash
-   kubectl port-forward svc/api-gateway 3000:3000 -n campus-caution
+   docker-compose up --build
    ```
-   Ardından http://localhost:3000 adresinden erişin
 
-3. **LoadBalancer:** (Eğer destelenen bir Kubernetes kümesindeyseniz)
-   ```bash
-   kubectl get service api-gateway -n campus-caution
-   ```
-   External-IP adresi üzerinden erişin
+3. To access the services:
+   - API Gateway: http://localhost:3000
+   - User Service: http://localhost:5001
+   - Department Service: http://localhost:8083
+   - Issue Service: http://localhost:5003
+   - Notification Service: http://localhost:5004
+   - RabbitMQ: http://localhost:15672
+   - Prometheus: http://localhost:9090
+   - Grafana: http://localhost:3001

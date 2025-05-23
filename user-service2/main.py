@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncio
 from aio_pika import connect, Message, ExchangeType, DeliveryMode
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Security
 import jwt
 from typing import Optional, Dict, Any
 from supabase import create_client, Client
@@ -23,10 +23,18 @@ import time
 import redis
 from functools import wraps
 from datetime import datetime
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 load_dotenv()
 
-app = FastAPI(title="User Service")
+# Define security scheme
+security = HTTPBearer()
+
+app = FastAPI(
+    title="User Service",
+    description="API for user management",
+    version="0.1.0"
+)
 
 # Instrument FastAPI app with default metrics
 Instrumentator().instrument(app).expose(app)
@@ -917,10 +925,12 @@ async def google_signup(request: dict):
         )
 
 
-# Update the profile endpoint to also check for Google users without UUID format
+# Update the profile endpoint to use OAuth2 scheme
 @app.get("/users/profile")
 @cache_response(expiration_time=300)  # Cache for 5 minutes
-async def get_profile(authorization: str = Header(None)):
+async def get_profile(credentials: HTTPAuthorizationCredentials = Security(security)):
+    authorization = f"Bearer {credentials.credentials}" if credentials else None
+    
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
@@ -1129,10 +1139,9 @@ async def get_profile(authorization: str = Header(None)):
 
 
 @app.put("/users/profile")
-async def update_profile(user_data: UpdateUserRequest, authorization: str = Header(None)):
-    """
-    Update user profile information
-    """
+async def update_profile(user_data: UpdateUserRequest, credentials: HTTPAuthorizationCredentials = Security(security)):
+    authorization = f"Bearer {credentials.credentials}" if credentials else None
+    
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
@@ -1152,7 +1161,6 @@ async def update_profile(user_data: UpdateUserRequest, authorization: str = Head
             # Custom token'dan user_id bilgisini çıkarmak için
             decoded = jwt.decode(token, options={"verify_signature": False})
             
-            # Custom token içinde uid alanı bulunur
             if "uid" in decoded:
                 user_id = decoded["uid"]
             else:
@@ -1161,6 +1169,7 @@ async def update_profile(user_data: UpdateUserRequest, authorization: str = Head
                     if field in decoded:
                         user_id = decoded[field]
                         break
+
         except Exception as e:
             print(f"Token decode error: {e}")
 
@@ -1197,6 +1206,18 @@ async def update_profile(user_data: UpdateUserRequest, authorization: str = Head
                 status_code=404,
                 detail={"status": "error", "code": 404, "message": "User not found"},
             )
+            
+        # Role kontrolü - sadece admin rolüne sahip kullanıcılar profil güncelleyebilir
+        user_role = current_user.get("role", "user")
+        if user_role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "status": "error", 
+                    "code": 403, 
+                    "message": "Forbidden. Only admin users can update user profiles."
+                }
+            )
 
         # Güncelleme için kullanıcı verilerini hazırla
         update_data = {}
@@ -1207,44 +1228,75 @@ async def update_profile(user_data: UpdateUserRequest, authorization: str = Head
         if user_data.phone_number is not None:
             update_data["phone_number"] = user_data.phone_number
         
-        # Güncellenme zamanını ekle
-        update_data["updated_at"] = str(datetime.now())
-        
         # Kullanıcıyı güncelle
         try:
             supabase = get_supabase_client()
             if supabase:
                 # Supabase kullanıcısını güncelle
-                updated_user = (
-                    supabase.table("users")
-                    .update(update_data)
-                    .eq("id", current_user["id"])
-                    .execute()
-                )
+                print(f"Updating user {current_user['id']} with data: {update_data}")
                 
-                if updated_user.data:
-                    print(f"User profile updated: {current_user['id']}")
-                    
-                    # Önbelleği temizle
-                    invalidate_cache(pattern=f"get_profile:*{user_id}*")
-                    invalidate_cache(pattern=f"get_profile:*{current_user['id']}*")
-                    
-                    # Güncellenmiş kullanıcı bilgilerini döndür
-                    USERS_UPDATED_TOTAL.inc()
-                    return JSONResponse(
-                        content={
-                            "status": "success",
-                            "code": 200,
-                            "message": "User profile updated successfully",
-                            "user_id": current_user["id"],
-                            "name": update_data.get("name", current_user["name"]),
-                            "surname": update_data.get("surname", current_user["surname"]),
-                            "email": current_user["email"],
-                            "phone_number": update_data.get("phone_number", current_user.get("phone_number", "")),
-                        }
+                # Supabase table adını kontrol et
+                try:
+                    # Önce kullanıcının varlığını test et
+                    test_user = (
+                        supabase.table("users")
+                        .select("*")
+                        .eq("id", current_user["id"])
+                        .execute()
                     )
-                else:
-                    raise Exception("No data returned from Supabase update operation")
+                    print(f"Test user query result: {test_user}")
+                    print(f"Found user in database: {test_user.data}")
+                    
+                    if not test_user.data:
+                        raise HTTPException(
+                            status_code=404,
+                            detail={
+                                "status": "error",
+                                "code": 404,
+                                "message": f"User with ID {current_user['id']} not found in Supabase",
+                            },
+                        )
+                        
+                    # Şimdi güncelleme işlemini gerçekleştir
+                    updated_user = (
+                        supabase.table("users")
+                        .update(update_data)
+                        .eq("id", current_user["id"])
+                        .execute()
+                    )
+                    
+                    print(f"Update response: {updated_user}")
+                    
+                    # Başarılı olup olmadığını kontrol et
+                    if hasattr(updated_user, 'data') and updated_user.data:
+                        print(f"User profile updated: {current_user['id']}")
+                        
+                        # Önbelleği temizle
+                        invalidate_cache(pattern=f"get_profile:*{user_id}*")
+                        invalidate_cache(pattern=f"get_profile:*{current_user['id']}*")
+                        
+                        # Güncellenmiş kullanıcı bilgilerini döndür
+                        USERS_UPDATED_TOTAL.inc()
+                        return JSONResponse(
+                            content={
+                                "status": "success",
+                                "code": 200,
+                                "message": "User profile updated successfully",
+                                "user_id": current_user["id"],
+                                "name": update_data.get("name", current_user["name"]),
+                                "surname": update_data.get("surname", current_user["surname"]),
+                                "email": current_user["email"],
+                                "phone_number": update_data.get("phone_number", current_user.get("phone_number", "")),
+                            }
+                        )
+                    else:
+                        # Eğer data özelliği yoksa veya boşsa, güncelleme başarısız oldu demektir
+                        error_details = getattr(updated_user, 'error', 'No detailed error information available')
+                        raise Exception(f"Update operation didn't return data: {error_details}")
+                
+                except Exception as query_err:
+                    print(f"Error during Supabase query: {query_err}")
+                    raise Exception(f"Supabase query error: {str(query_err)}")
             else:
                 raise Exception("Could not connect to Supabase")
         except Exception as e:
@@ -1274,10 +1326,9 @@ async def update_profile(user_data: UpdateUserRequest, authorization: str = Head
 
 
 @app.delete("/users/profile")
-async def delete_profile(authorization: str = Header(None)):
-    """
-    Delete user profile
-    """
+async def delete_profile(credentials: HTTPAuthorizationCredentials = Security(security)):
+    authorization = f"Bearer {credentials.credentials}" if credentials else None
+    
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
@@ -1297,7 +1348,6 @@ async def delete_profile(authorization: str = Header(None)):
             # Custom token'dan user_id bilgisini çıkarmak için
             decoded = jwt.decode(token, options={"verify_signature": False})
             
-            # Custom token içinde uid alanı bulunur
             if "uid" in decoded:
                 user_id = decoded["uid"]
             else:
@@ -1306,6 +1356,7 @@ async def delete_profile(authorization: str = Header(None)):
                     if field in decoded:
                         user_id = decoded[field]
                         break
+
         except Exception as e:
             print(f"Token decode error: {e}")
 
@@ -1342,6 +1393,18 @@ async def delete_profile(authorization: str = Header(None)):
                 status_code=404,
                 detail={"status": "error", "code": 404, "message": "User not found"},
             )
+            
+        # Role kontrolü - sadece admin rolüne sahip kullanıcılar profil silebilir
+        user_role = current_user.get("role", "user")
+        if user_role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "status": "error", 
+                    "code": 403, 
+                    "message": "Forbidden. Only admin users can delete user profiles."
+                }
+            )
 
         user_email = current_user.get("email")
         
@@ -1360,6 +1423,22 @@ async def delete_profile(authorization: str = Header(None)):
         try:
             supabase = get_supabase_client()
             if supabase:
+                # Önce kullanıcının varlığını test et
+                test_user = (
+                    supabase.table("users")
+                    .select("*")
+                    .eq("id", current_user["id"])
+                    .execute()
+                )
+                print(f"Test user query result for deletion: {test_user}")
+                print(f"Found user in database: {test_user.data}")
+                
+                if not test_user.data:
+                    print(f"Warning: User with ID {current_user['id']} not found in Supabase for deletion")
+                    # Silme işlemine devam edebiliriz, kullanıcı zaten yoksa silme başarılı sayılır
+                
+                # Kullanıcıyı silme işlemini gerçekleştir
+                print(f"Attempting to delete user {current_user['id']} from Supabase")
                 deleted_response = (
                     supabase.table("users")
                     .delete()
@@ -1367,11 +1446,15 @@ async def delete_profile(authorization: str = Header(None)):
                     .execute()
                 )
                 
-                if deleted_response.data:
+                print(f"Delete response: {deleted_response}")
+                
+                if hasattr(deleted_response, 'data') and deleted_response.data:
                     supabase_deleted = True
                     print(f"User deleted from Supabase: {current_user['id']}")
                 else:
                     print(f"No records were deleted from Supabase for user: {current_user['id']}")
+                    error_details = getattr(deleted_response, 'error', 'No detailed error information available')
+                    print(f"Supabase delete error details: {error_details}")
             else:
                 print("Could not connect to Supabase")
         except Exception as supabase_err:

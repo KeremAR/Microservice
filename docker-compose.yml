@@ -129,22 +129,6 @@ services:
       - microservice-network
     restart: always
 
-  postgres:
-    image: postgres:14-alpine
-    container_name: postgres
-    ports:
-      - "5433:5432"
-    expose:
-      - "5432"
-    environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-userdb}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - microservice-network
-
   rabbitmq:
     image: rabbitmq:3.12-management
     container_name: rabbitmq
@@ -245,7 +229,6 @@ services:
     restart: always
 
 volumes:
-  postgres_data:
   rabbitmq_data:
   prometheus_data:
   grafana_data:

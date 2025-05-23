@@ -229,10 +229,6 @@ GF_SECURITY_ADMIN_USER=admin
 GF_SECURITY_ADMIN_PASSWORD=admin
 GF_USERS_ALLOW_SIGN_UP=false
 
-# PostgreSQL
-POSTGRES_PASSWORD=postgres
-POSTGRES_USER=postgres
-POSTGRES_DB=userdb
 ```
 
 The Docker Compose file is configured to use these environment variables for all services. Additionally:
